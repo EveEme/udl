@@ -1,0 +1,73 @@
+[project]
+name = "uld"
+authors = [{ name = "Evelyn Emelanov" }]
+urls = { Repository = "https://github.com/EveEme/uld" }
+description = "Uncertainty Disentanglement with Laplace Approximation in Neural Networks."
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3 :: Only",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "torch",
+    "skerch",
+    "torchvision",
+    "scikit-learn",
+    "scikit-image",
+    "scipy",
+    "numpy",
+    "numba",
+    "opencv-python",
+    "huggingface_hub",
+    "backpack-for-pytorch",
+    "pandas",
+    "tabulate",
+    "timm",
+    "pytest-cov",
+    "wand",
+    "wandb"
+]
+version = "0.0.1"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11,<3.14"
+
+[project.optional-dependencies]
+dev = [
+    "curvlinops-for-pytorch",
+    "matplotlib",
+    "tueplots",
+    "ruff",
+    "pre-commit",
+    "ipykernel",
+    "pytest",
+    "pyright",
+]
+
+# PEP 518 Build System Configuration
+# See https://peps.python.org/pep-0518/
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = ["bul/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--import-mode=importlib"]
+filterwarnings = [
+    "ignore:Full backward hook is firing when gradients are computed with respect.*:UserWarning",
+]
