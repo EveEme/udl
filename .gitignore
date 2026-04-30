@@ -1,0 +1,25 @@
+# Extensions
+*.egg-info
+*.pyc
+*.pt
+*.zip
+*.txt
+*.json
+*.npz
+*.pdf
+*.npy
+*.out
+*.md
+!README.md
+
+# Files
+.DS_Store
+.claude-hooks-config.sh
+check_*
+.coverage
+AGENTS.md
+
+# Folders
+.venv
+data
+results
