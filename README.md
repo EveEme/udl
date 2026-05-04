@@ -3,8 +3,8 @@ Layer-wise Laplace approximations for epistemic and aleatoric uncertainty disent
 
 ## Setup
 Create virtual environment for `uld` and then use one of the commands:
-- `python -m pip .`
-- `python -m pip -e '.[dev]'` 
+- `python -m pip install .`
+- `python -m pip install -e '.[dev]'` 
 
 ## Dataset
 The Cifar-10 dataset will be downloaded automatically.
