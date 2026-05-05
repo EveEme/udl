@@ -1,260 +1,137 @@
-"""Plots dual-Laplace experiment summaries from W&B and tensors."""
+"""Generate dual-Laplace comparison plots from W&B summaries and saved tensors.
+"""
+from __future__ import annotations
 
 import argparse
 import logging
 from collections import defaultdict
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import wandb
 from scipy.stats import gaussian_kde, pearsonr, spearmanr
-from tqdm import tqdm
 from tueplots import bundles
 from utils import ESTIMATOR_CONVERSION_DICT, ID_TO_METHOD, setup_logging
 
 setup_logging()
 logger = logging.getLogger(__name__)
 
-EXPERIMENT_ALIASES = {
-    "flella": ("flella", "first-layer-epistemic-last-layer-aleatoric"),
-    "llefla": ("llefla", "last-layer-epistemic-first-layer-aleatoric"),
+IT_PAIRWISE_METRICS = {
+    "rank_correlation_au_it_au_vs_eu": "AU-Laplace AU vs AU-Laplace EU",
+    "rank_correlation_au_it_au_vs_eu_it_eu": "AU-Laplace AU vs EU-Laplace EU",
+    "rank_correlation_eu_it_au_vs_eu": "EU-Laplace AU vs EU-Laplace EU",
+    "rank_correlation_eu_it_au_vs_au_it_eu": "EU-Laplace AU vs AU-Laplace EU",
 }
 
-APPROXIMATION_ALIASES = {
-    "kfac": ("kfac",),
-    "low-rank": ("low-rank", "low_rank", "lowrank"),
+BREGMAN_PAIRWISE_METRICS = {
+    "rank_correlation_au_bregman_au_vs_eu": "AU-Laplace AU vs AU-Laplace EU",
+    "rank_correlation_au_bregman_au_vs_eu_bregman_eu": "AU-Laplace AU vs EU-Laplace EU",
+    "rank_correlation_eu_bregman_au_vs_eu": "EU-Laplace AU vs EU-Laplace EU",
+    "rank_correlation_eu_bregman_au_vs_au_bregman_eu": "EU-Laplace AU vs AU-Laplace EU",
 }
 
-METRIC_LABELS = {
-    "rank_correlation_au_it_au_vs_eu": "IT AU-LA AU vs EU",
-    "rank_correlation_eu_it_au_vs_eu": "IT EU-LA AU vs EU",
-    "rank_correlation_au_it_au_vs_eu_it_eu": "IT AU-LA AU vs EU-LA EU",
-    "rank_correlation_eu_it_au_vs_au_it_eu": "IT EU-LA AU vs AU-LA EU",
-    "correlation_au_it_au_vs_eu": "Pearson IT AU-LA AU vs EU",
-    "correlation_eu_it_au_vs_eu": "Pearson IT EU-LA AU vs EU",
-    "correlation_au_it_au_vs_eu_it_eu": "Pearson IT AU-LA AU vs EU-LA EU",
-    "correlation_eu_it_au_vs_au_it_eu": "Pearson IT EU-LA AU vs AU-LA EU",
-    "rank_correlation_au_bregman_au_vs_eu": "Bregman AU-LA AU vs EU",
-    "rank_correlation_eu_bregman_au_vs_eu": "Bregman EU-LA AU vs EU",
-    "rank_correlation_au_bregman_au_vs_eu_bregman_eu": (
-        "Bregman AU-LA AU vs EU-LA EU"
-    ),
-    "rank_correlation_eu_bregman_au_vs_au_bregman_eu": (
-        "Bregman EU-LA AU vs AU-LA EU"
-    ),
-    "correlation_au_bregman_au_vs_eu": "Pearson Bregman AU-LA AU vs EU",
-    "correlation_eu_bregman_au_vs_eu": "Pearson Bregman EU-LA AU vs EU",
-    "correlation_au_bregman_au_vs_eu_bregman_eu": (
-        "Pearson Bregman AU-LA AU vs EU-LA EU"
-    ),
-    "correlation_eu_bregman_au_vs_au_bregman_eu": (
-        "Pearson Bregman EU-LA AU vs AU-LA EU"
-    ),
-    "rank_correlation_bregman_au_b_dual_bma": "Bregman AU vs Bias",
-    "correlation_bregman_au_b_dual_bma": "Pearson Bregman AU vs Bias",
-    "rank_correlation_bregman_au": "AU vs Bregman GT AU",
-    "auroc_oodness": "OOD AUROC",
+PREDICTIVE_ENTROPY_METRICS = [
+    "auroc_hard_bma_correctness_original",
+    "auroc_oodness",
+    "ece_hard_bma_correctness_original",
+]
+
+METRIC_NAME = {
     "auroc_hard_bma_correctness_original": "ID Correctness AUROC",
-    "ece_hard_bma_correctness_original": "ECE",
+    "auroc_oodness": "OOD AUROC",
+    "ece_hard_bma_correctness_original": "-ECE",
+    "rank_correlation_bregman_au": "Rank Corr. with GT Aleatoric",
+    "rank_correlation_bregman_au_b_dual_bma": "Bregman AU vs Bias Rank Corr.",
 }
-
-ESTIMATOR_LABELS = {
-    **ESTIMATOR_CONVERSION_DICT,
-    "rank_correlation_au_it_au_vs_eu": "AU-LA: AU vs EU",
-    "rank_correlation_eu_it_au_vs_eu": "EU-LA: AU vs EU",
-    "rank_correlation_au_it_au_vs_eu_it_eu": "AU-LA AU vs EU-LA EU",
-    "rank_correlation_eu_it_au_vs_au_it_eu": "EU-LA AU vs AU-LA EU",
-    "correlation_au_it_au_vs_eu": "AU-LA: AU vs EU",
-    "correlation_eu_it_au_vs_eu": "EU-LA: AU vs EU",
-    "correlation_au_it_au_vs_eu_it_eu": "AU-LA AU vs EU-LA EU",
-    "correlation_eu_it_au_vs_au_it_eu": "EU-LA AU vs AU-LA EU",
-    "rank_correlation_au_bregman_au_vs_eu": "AU-LA: AU vs EU",
-    "rank_correlation_eu_bregman_au_vs_eu": "EU-LA: AU vs EU",
-    "rank_correlation_au_bregman_au_vs_eu_bregman_eu": (
-        "AU-LA AU vs EU-LA EU"
-    ),
-    "rank_correlation_eu_bregman_au_vs_au_bregman_eu": (
-        "EU-LA AU vs AU-LA EU"
-    ),
-    "correlation_au_bregman_au_vs_eu": "AU-LA: AU vs EU",
-    "correlation_eu_bregman_au_vs_eu": "EU-LA: AU vs EU",
-    "correlation_au_bregman_au_vs_eu_bregman_eu": "AU-LA AU vs EU-LA EU",
-    "correlation_eu_bregman_au_vs_au_bregman_eu": "EU-LA AU vs AU-LA EU",
-    "rank_correlation_bregman_au_b_dual_bma": "AU vs Bias",
-    "correlation_bregman_au_b_dual_bma": "AU vs Bias",
-}
-
-IT_RANK_CORRELATION_METRICS = [
-    "rank_correlation_au_it_au_vs_eu",
-    "rank_correlation_eu_it_au_vs_eu",
-    "rank_correlation_au_it_au_vs_eu_it_eu",
-    "rank_correlation_eu_it_au_vs_au_it_eu",
+ECE_METRICS = [
+    "ece_hard_bma_correctness_original",
 ]
 
-IT_PEARSON_CORRELATION_METRICS = [
-    "correlation_au_it_au_vs_eu",
-    "correlation_eu_it_au_vs_eu",
-    "correlation_au_it_au_vs_eu_it_eu",
-    "correlation_eu_it_au_vs_au_it_eu",
-]
+EPISTEMIC_ESTIMATORS = ["au_it_eu", "eu_it_eu", "jensen_shannon_divergences", "one_minus_max_probs_of_bma"]
+ALEATORIC_ESTIMATORS = ["au_it_au", "eu_it_au", "expected_entropies"]
+PREDICTIVE_ESTIMATORS = ["entropies_of_bma", "one_minus_max_probs_of_bma"]
+ECE_ESTIMATORS = EPISTEMIC_ESTIMATORS + PREDICTIVE_ESTIMATORS
 
-BREGMAN_RANK_CORRELATION_METRICS = [
-    "rank_correlation_au_bregman_au_vs_eu",
-    "rank_correlation_eu_bregman_au_vs_eu",
-    "rank_correlation_au_bregman_au_vs_eu_bregman_eu",
-    "rank_correlation_eu_bregman_au_vs_au_bregman_eu",
-]
-
-BREGMAN_PEARSON_CORRELATION_METRICS = [
-    "correlation_au_bregman_au_vs_eu",
-    "correlation_eu_bregman_au_vs_eu",
-    "correlation_au_bregman_au_vs_eu_bregman_eu",
-    "correlation_eu_bregman_au_vs_au_bregman_eu",
-]
-
-EPISTEMIC_ESTIMATORS = [
-    "au_it_eu",
-    "eu_it_eu",
-    "jensen_shannon_divergences",
-]
-
-ALEATORIC_ESTIMATORS = [
-    "au_it_au",
-    "eu_it_au",
-    "expected_entropies",
-]
-
-PREDICTIVE_ENTROPY_ESTIMATORS = ["entropies_of_bma"]
-
-MATRIX_ESTIMATORS = [
+CORRELATION_MATRIX_ESTIMATORS = [
     "entropies_of_bma",
     "au_it_au",
     "au_it_eu",
     "eu_it_au",
     "eu_it_eu",
+    "au_bregman_au",
+    "au_bregman_eu",
+    "eu_bregman_au",
+    "eu_bregman_eu",
     "expected_entropies",
     "jensen_shannon_divergences",
 ]
 
-RANKING_SPECS = {
-    "a_it_rank_correlation": (IT_RANK_CORRELATION_METRICS, [None]),
-    "a_bregman_rank_correlation": (BREGMAN_RANK_CORRELATION_METRICS, [None]),
-    "c_predictive_entropy": (
-        [
-            "auroc_hard_bma_correctness_original",
-            "auroc_oodness",
-            "ece_hard_bma_correctness_original",
-        ],
-        PREDICTIVE_ENTROPY_ESTIMATORS,
-    ),
-    "d_ood_auroc_epistemic": (["auroc_oodness"], EPISTEMIC_ESTIMATORS),
-    "e_gt_aleatoric_rank_correlation": (
-        ["rank_correlation_bregman_au"],
-        ALEATORIC_ESTIMATORS,
-    ),
-    "f_id_correctness_auroc_epistemic": (
-        ["auroc_hard_bma_correctness_original"],
-        EPISTEMIC_ESTIMATORS,
-    ),
-    "g_expected_calibration_error": (
-        ["ece_hard_bma_correctness_original"],
-        EPISTEMIC_ESTIMATORS + PREDICTIVE_ENTROPY_ESTIMATORS,
-    ),
-    "h_bregman_aleatoric_bias_rank_correlation": (
-        ["rank_correlation_bregman_au_b_dual_bma"],
-        [None],
-    ),
-}
+MATRIX_METRICS = [
+    "auroc_hard_bma_correctness_original",
+    "auroc_oodness",
+    "ece_hard_bma_correctness_original",
+    "rank_correlation_bregman_au",
+]
 
 
-parser = argparse.ArgumentParser(description="Plot W&B summaries.")
-parser.add_argument("dataset", help="Dataset name used in the output path.")
-parser.add_argument(
-    "--wandb-project",
-    default="evelyn-emelanov-university-of-t-bingen/udl-thesis",
-    help="W&B project path in entity/project form.",
-)
-parser.add_argument(
-    "--experiment",
-    choices=tuple(EXPERIMENT_ALIASES),
-    action="append",
-    default=[],
-    help="Experiment to include. Repeat to include several. Defaults to both.",
-)
-parser.add_argument(
-    "--experiment-filter",
-    action="append",
-    default=[],
-    metavar="EXPERIMENT=SUBSTRING",
-    help=(
-        "Map an experiment to the substring used in your W&B run names. "
-        "Example: --experiment-filter flella=my-first-layer-run."
-    ),
-)
-parser.add_argument(
-    "--approximation",
-    choices=tuple(APPROXIMATION_ALIASES),
-    action="append",
-    default=[],
-    help="Approximation method to include. Defaults to kfac and low-rank.",
-)
-parser.add_argument(
-    "--run-name-filter",
-    action="append",
-    default=[],
-    help="Additional substring that must appear in the W&B run name.",
-)
-parser.add_argument(
-    "--run-group-filter",
-    default=None,
-    help="Optional exact W&B run group filter.",
-)
-parser.add_argument(
-    "--prefix",
-    action="append",
-    default=[],
-    help="Restrict summary-key prefixes. Repeat for multiple prefixes.",
-)
-parser.add_argument(
-    "--ood-prefix",
-    default=None,
-    help=(
-        "Summary-key prefix to prefer for OOD AUROC. "
-        "Defaults to a mixed prefix if found."
-    ),
-)
-parser.add_argument(
-    "--output-dir",
-    type=Path,
-    default=None,
-    help="Directory for generated plots. Defaults to results/<dataset>/dual_laplace.",
-)
-parser.add_argument(
-    "--tensor-dir",
-    type=Path,
-    default=None,
-    help="Directory containing saved .pt decomposition pairs for scatter plots.",
-)
-parser.add_argument(
-    "--tensor-glob",
-    default="**/*it_au_eu.pt",
-    help="Glob, relative to --tensor-dir, for scatter input tensors.",
-)
-parser.add_argument(
-    "--no-wandb",
-    action="store_true",
-    help="Only generate scatter plots from --tensor-dir.",
-)
+def parse_args() -> argparse.Namespace:
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(description="Plot dual-Laplace results from W&B.")
+    parser.add_argument("dataset", help="Dataset key used in ID_TO_METHOD.")
+    parser.add_argument(
+        "--wandb-project",
+        default="evelyn-emelanov-university-of-t-bingen/udl-thesis",
+        help="W&B project path in entity/project form.",
+    )
+    parser.add_argument(
+        "--approximation",
+        choices=("kfac", "low-rank"),
+        action="append",
+        default=[],
+        help="Filter by approximation family. Repeat to include both.",
+    )
+    parser.add_argument(
+        "--laplace-type",
+        choices=("eu", "au"),
+        action="append",
+        default=[],
+        help="Filter by dual-laplace variant in method label. Repeat to include both.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Defaults to results/<dataset>/dual_laplace.",
+    )
+    parser.add_argument(
+        "--ood-prefix",
+        default=None,
+        help=(
+            "Explicit prefix to use for OOD AUROC metrics. "
+            "By default, the first prefix containing 'mixed' is used."
+        ),
+    )
+    parser.add_argument(
+        "--tensor-dir",
+        type=Path,
+        default=None,
+        help="Directory containing saved .pt tuples for density scatter plots.",
+    )
+    parser.add_argument(
+        "--tensor-glob",
+        default="**/*_au_*_eu.pt",
+        help="Glob used under --tensor-dir to find decomposition tuples.",
+    )
+    return parser.parse_args()
 
 
 def setup_plot_style() -> None:
-    """Set a compact paper plotting style."""
+    """Use plotting style."""
     config = bundles.neurips2024()
-    config["figure.figsize"] = (4.8, 2.6)
+    config["figure.figsize"] = (5.2, 2.9)
     plt.rcParams.update(config)
     plt.rcParams["text.latex.preamble"] += (
         r"\usepackage{amsmath} \usepackage{amsfonts} \usepackage{bm}"
@@ -262,105 +139,49 @@ def setup_plot_style() -> None:
 
 
 def normalize_text(text: str) -> str:
-    """Normalize text for loose run-name matching."""
+    """Normalize text for robust substring matching."""
     return text.lower().replace("_", "-").replace(" ", "-")
 
 
-def contains_alias(text: str, aliases: Iterable[str]) -> bool:
-    """Return whether text contains one of the aliases."""
-    normalized = normalize_text(text)
-    return any(normalize_text(alias) in normalized for alias in aliases)
+def contains(text: str, token: str) -> bool:
+    """Return whether normalized token is contained in normalized text."""
+    return normalize_text(token) in normalize_text(text)
 
 
-def get_configured_run_label(
-    run: wandb.apis.public.Run,
-    args: argparse.Namespace,
-) -> str | None:
-    """Return the configured method label for a run from ID_TO_METHOD."""
-    id_to_method = ID_TO_METHOD.get(args.dataset, {})
-    candidates = [
-        run.id,
-        run.name or "",
-        f"{args.wandb_project}/{run.id}",
-        f"{args.wandb_project}/{run.name or ''}",
-    ]
-    for candidate in candidates:
-        if candidate in id_to_method:
-            return id_to_method[candidate]
-    return None
+def estimator_label(estimator: str) -> str:
+    """Return a readable estimator label."""
+    return ESTIMATOR_CONVERSION_DICT.get(estimator, estimator)
 
 
-def get_experiment_aliases(args: argparse.Namespace) -> dict[str, tuple[str, ...]]:
-    """Return default experiment aliases plus user-provided W&B substrings."""
-    aliases = {key: list(value) for key, value in EXPERIMENT_ALIASES.items()}
-    for spec in args.experiment_filter:
-        experiment, separator, substring = spec.partition("=")
-        if not separator or experiment not in aliases or not substring:
-            msg = (
-                "--experiment-filter must look like EXPERIMENT=SUBSTRING, "
-                f"where EXPERIMENT is one of {sorted(EXPERIMENT_ALIASES)}."
-            )
-            raise ValueError(msg)
-        aliases[experiment].append(substring)
-    return {key: tuple(value) for key, value in aliases.items()}
+def infer_method_tags(method_label: str) -> tuple[str | None, str | None]:
+    """Infer approximation and dual-laplace type from configured method label."""
+    approx = None
+    if contains(method_label, "kfac"):
+        approx = "kfac"
+    elif contains(method_label, "low-rank"):
+        approx = "low-rank"
+
+    laplace_type = None
+    if contains(method_label, "eu laplace"):
+        laplace_type = "eu"
+    elif contains(method_label, "au laplace"):
+        laplace_type = "au"
+
+    return approx, laplace_type
 
 
-def matched_experiment(label: str, args: argparse.Namespace) -> str | None:
-    """Return the experiment name matched by a W&B run label."""
-    experiment_aliases = get_experiment_aliases(args)
-    experiments = args.experiment or list(EXPERIMENT_ALIASES)
-    for experiment in experiments:
-        if contains_alias(label, experiment_aliases[experiment]):
-            return experiment
-    return None
-
-
-def method_matches_filters(
+def should_include_method(
     method_label: str,
-    run_label: str,
-    args: argparse.Namespace,
+    approximations: list[str],
+    laplace_types: list[str],
 ) -> bool:
-    """Check whether a configured method belongs to the requested slice."""
-    approximations = args.approximation or list(APPROXIMATION_ALIASES)
-
-    return (
-        matched_experiment(method_label, args) is not None
-        and any(
-            contains_alias(method_label, APPROXIMATION_ALIASES[item])
-            for item in approximations
-        )
-        and all(
-            contains_alias(f"{run_label} {method_label}", (item,))
-            for item in args.run_name_filter
-        )
-    )
-
-
-def run_matches(run: wandb.apis.public.Run, args: argparse.Namespace) -> bool:
-    """Check whether a W&B run is configured and requested."""
-    method_label = get_configured_run_label(run, args)
-    if method_label is None:
+    """Return whether a configured method label should be included."""
+    approx, laplace_type = infer_method_tags(method_label)
+    if approx is None or laplace_type is None:
         return False
-    return method_matches_filters(method_label, run.name or run.id, args)
-
-
-def run_group_label(run: wandb.apis.public.Run, args: argparse.Namespace) -> str:
-    """Build a compact label from experiment and approximation aliases."""
-    configured_label = get_configured_run_label(run, args)
-    if configured_label is not None:
-        return configured_label
-
-    label = run.name or run.id
-    experiment = (matched_experiment(label, args) or "unknown").upper()
-    approximation = next(
-        (
-            name.upper()
-            for name, aliases in APPROXIMATION_ALIASES.items()
-            if contains_alias(label, aliases)
-        ),
-        "UNKNOWN",
-    )
-    return f"{experiment} {approximation}"
+    approx_ok = not approximations or approx in approximations
+    laplace_ok = not laplace_types or laplace_type in laplace_types
+    return approx_ok and laplace_ok
 
 
 def metric_key_parts(
@@ -368,7 +189,7 @@ def metric_key_parts(
     metric: str,
     estimator: str | None,
 ) -> tuple[str, str] | None:
-    """Return prefix and metric segment for a W&B summary key, if it matches."""
+    """Return summary-key prefix and metric segment for a matching key."""
     metric_suffix = f"_{metric}"
     if not key.endswith(metric_suffix):
         return None
@@ -389,401 +210,521 @@ def discover_prefixes(
     metrics: Iterable[str],
     estimators: Iterable[str | None],
 ) -> list[str]:
-    """Discover prefixes that contain one of the requested metrics."""
+    """Discover summary-key prefixes that contain requested metrics."""
     prefixes = set()
     for run in runs:
         for key in run.summary.keys():
             for metric in metrics:
                 for estimator in estimators:
-                    parts = metric_key_parts(key, metric, estimator)
-                    if parts is not None:
-                        prefixes.add(parts[0])
+                    if metric_key_parts(key, metric, estimator) is not None:
+                        prefixes.add(metric_key_parts(key, metric, estimator)[0])
+    
+    if not prefixes:
+        logger.warning(
+            "No prefixes found for metrics %s and estimators %s. Available W&B keys:",
+            list(metrics)[:3],
+            list(estimators)[:3],
+        )
+        for run in runs:
+            for key in sorted(run.summary.keys())[:10]:
+                logger.warning("  %s", key)
     return sorted(prefixes)
 
 
 def choose_prefix(
-    prefixes: list[str],
     metric: str,
-    args: argparse.Namespace,
+    available_prefixes: list[str],
+    explicit_ood_prefix: str | None,
 ) -> str | None:
-    """Choose the best prefix for a metric."""
-    if args.prefix:
-        candidates = [prefix for prefix in prefixes if prefix in args.prefix]
-    else:
-        candidates = prefixes
-
-    if not candidates:
+    """Choose an ID/OOD prefix for the requested metric."""
+    if not available_prefixes:
         return None
-    if metric == "auroc_oodness":
-        if args.ood_prefix in candidates:
-            return args.ood_prefix
-        mixed = [prefix for prefix in candidates if "mixed" in prefix]
-        return mixed[0] if mixed else candidates[0]
 
-    id_like = [
+    if metric == "auroc_oodness":
+        if explicit_ood_prefix and explicit_ood_prefix in available_prefixes:
+            return explicit_ood_prefix
+        mixed = [prefix for prefix in available_prefixes if "mixed" in prefix]
+        return mixed[0] if mixed else available_prefixes[0]
+
+    non_ood = [
         prefix
-        for prefix in candidates
+        for prefix in available_prefixes
         if "mixed" not in prefix and "ood" not in prefix
     ]
-    return id_like[0] if id_like else candidates[0]
+    return non_ood[0] if non_ood else available_prefixes[0]
 
 
-def read_summary_value(
+def read_value(
     run: wandb.apis.public.Run,
     metric: str,
     estimator: str | None,
     prefix: str,
 ) -> float | None:
-    """Read a scalar metric from a W&B run summary."""
-    key = (
-        f"{prefix}_{metric}"
-        if estimator is None
-        else f"{prefix}_{estimator}_{metric}"
-    )
+    """Read a scalar metric from W&B run summary."""
+    key = f"{prefix}_{metric}" if estimator is None else f"{prefix}_{estimator}_{metric}"
     value = run.summary.get(key)
     if value is None or isinstance(value, str):
         return None
-    return float(value)
+
+    scalar = float(value)
+    if metric == "ece_hard_bma_correctness_original":
+        scalar *= -1
+    return scalar
 
 
-def collect_values(
-    runs: list[wandb.apis.public.Run],
+def load_runs(args: argparse.Namespace) -> list[tuple[wandb.apis.public.Run, str]]:
+    """Load configured runs from ID_TO_METHOD mapping for the dataset."""
+    id_to_method = ID_TO_METHOD.get(args.dataset, {})
+    if not id_to_method:
+        msg = f"No run mapping configured in ID_TO_METHOD for dataset {args.dataset!r}."
+        raise ValueError(msg)
+
+    api = wandb.Api()
+    loaded: list[tuple[wandb.apis.public.Run, str]] = []
+
+    for run_id, method_label in sorted(id_to_method.items()):
+        if not should_include_method(method_label, args.approximation, args.laplace_type):
+            continue
+
+        path = run_id if run_id.count("/") >= 2 else f"{args.wandb_project}/{run_id}"
+        run = api.run(path)
+        if run.state != "finished":
+            logger.info("Skipping %s (%s): state=%s", run.id, method_label, run.state)
+            continue
+        loaded.append((run, method_label))
+
+    if not loaded:
+        msg = "No finished runs matched filters from ID_TO_METHOD mapping."
+        raise RuntimeError(msg)
+
+    logger.info("Loaded %d runs from ID_TO_METHOD mapping.", len(loaded))
+    return loaded
+
+
+def collect_metric_values(
+    run_entries: list[tuple[wandb.apis.public.Run, str]],
     metrics: list[str],
     estimators: list[str | None],
     args: argparse.Namespace,
 ) -> dict[tuple[str, str | None, str], list[float]]:
     """Collect values keyed by metric, estimator, and method label."""
+    runs = [run for run, _ in run_entries]
     prefixes = discover_prefixes(runs, metrics, estimators)
-    values: dict[tuple[str, str | None, str], list[float]] = defaultdict(list)
 
+    values: dict[tuple[str, str | None, str], list[float]] = defaultdict(list)
     for metric in metrics:
-        prefix = choose_prefix(prefixes, metric, args)
+        prefix = choose_prefix(metric, prefixes, args.ood_prefix)
         if prefix is None:
-            logger.info("No prefix found for %s", metric)
+            logger.info("No prefix available for metric %s", metric)
             continue
-        for run in runs:
-            label = run_group_label(run, args)
+
+        for run, method_label in run_entries:
             for estimator in estimators:
-                value = read_summary_value(run, metric, estimator, prefix)
-                if value is None or np.isnan(value):
+                scalar = read_value(run, metric, estimator, prefix)
+                if scalar is None or np.isnan(scalar):
                     continue
-                if metric == "ece_hard_bma_correctness_original":
-                    value *= -1
-                values[(metric, estimator, label)].append(value)
+                values[(metric, estimator, method_label)].append(scalar)
 
     return values
 
 
-def plot_grouped_bars(
+def plot_metric_by_method(
     values: dict[tuple[str, str | None, str], list[float]],
-    metrics: list[str],
+    metric: str,
     estimators: list[str | None],
     title: str,
     save_path: Path,
 ) -> None:
-    """Plot grouped bars for metric/estimator values."""
-    rows = []
-    labels = sorted({label for _, _, label in values})
-    for label in labels:
-        for metric in metrics:
-            for estimator in estimators:
-                samples = values.get((metric, estimator, label), [])
-                if not samples:
-                    continue
-                name = METRIC_LABELS.get(metric, metric)
-                if estimator is not None:
-                    est_label = ESTIMATOR_LABELS.get(estimator, estimator)
-                    name = f"{name}\n{est_label}"
-                rows.append((label, name, np.mean(samples), np.std(samples)))
+    """Plot bars by method for one metric across one or more estimators."""
+    methods = sorted({method for _, _, method in values})
+    rows: list[tuple[str, str, float, float]] = []
+
+    for method in methods:
+        for estimator in estimators:
+            samples = values.get((metric, estimator, method), [])
+            if not samples:
+                continue
+            est_name = "Estimatorless" if estimator is None else estimator_label(estimator)
+            rows.append((method, est_name, float(np.mean(samples)), float(np.std(samples))))
 
     if not rows:
-        logger.info("No values to plot for %s", title)
+        logger.info("No values found for plot %s", title)
         return
 
-    row_labels = [f"{method}\n{name}" for method, name, _, _ in rows]
-    means = [mean for _, _, mean, _ in rows]
-    stds = [std for _, _, _, std in rows]
     x = np.arange(len(rows))
+    means = [item[2] for item in rows]
+    stds = [item[3] for item in rows]
+    tick_labels = [f"{method}\n{est}" for method, est, _, _ in rows]
 
-    fig_width = max(5.0, 0.36 * len(rows))
+    fig_width = max(6.0, 0.34 * len(rows))
     _, ax = plt.subplots(figsize=(fig_width, 3.0))
-    ax.bar(x, means, yerr=stds, capsize=2, color="#4267d2", zorder=2)
+    ax.bar(x, means, yerr=stds, capsize=2, color="#2a77b3", zorder=2)
     ax.grid(axis="y", linewidth=0.4, zorder=1)
     ax.spines[["right", "top"]].set_visible(False)
-    ax.set_title(title)
+    ax.set_ylabel(METRIC_NAME.get(metric, metric))
     ax.set_xticks(x)
-    ax.set_xticklabels(row_labels, rotation=45, ha="right")
-    ax.set_ylabel("Mean over runs")
+    ax.set_xticklabels(tick_labels, rotation=45, ha="right")
+
     save_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(save_path)
     plt.close()
 
 
-def build_run_metric_matrix(
-    runs: list[wandb.apis.public.Run],
-    metrics: list[str],
-    estimators: list[str | None],
-    args: argparse.Namespace,
-) -> tuple[np.ndarray, list[str]]:
-    """Build a matrix with rows as metric/estimator pairs and columns as runs."""
-    prefixes = discover_prefixes(runs, metrics, estimators)
-    rows = []
-    row_labels = []
+def plot_pairwise_rank_correlation(
+    values: dict[tuple[str, str | None, str], list[float]],
+    pairwise_metrics: dict[str, str],
+    title: str,
+    save_path: Path,
+) -> None:
+    """Plot explicit dual-laplace pairwise rank correlations."""
+    methods = sorted({method for _, _, method in values})
+    pairs = list(pairwise_metrics.items())
 
-    for metric in metrics:
-        prefix = choose_prefix(prefixes, metric, args)
-        if prefix is None:
-            continue
-        for estimator in estimators:
-            row = []
-            for run in runs:
-                value = read_summary_value(run, metric, estimator, prefix)
-                if value is None:
-                    row = []
-                    break
-                row.append(
-                    -value
-                    if metric == "ece_hard_bma_correctness_original"
-                    else value
-                )
-            if row:
-                label = METRIC_LABELS.get(metric, metric)
-                if estimator is not None:
-                    label = f"{label}: {ESTIMATOR_LABELS.get(estimator, estimator)}"
-                rows.append(row)
-                row_labels.append(label)
+    if not methods:
+        logger.info("No methods available for %s", title)
+        return
 
-    return np.array(rows), row_labels
+    x = np.arange(len(pairs))
+    width = 0.8 / max(len(methods), 1)
+
+    _, ax = plt.subplots(figsize=(7.2, 3.0))
+    for index, method in enumerate(methods):
+        means = []
+        stds = []
+        for metric, _ in pairs:
+            samples = values.get((metric, None, method), [])
+            if not samples:
+                means.append(np.nan)
+                stds.append(0.0)
+            else:
+                means.append(float(np.mean(samples)))
+                stds.append(float(np.std(samples)))
+
+        positions = x - 0.4 + (index + 0.5) * width
+        ax.bar(positions, means, width=width, yerr=stds, capsize=2, label=method, zorder=2)
+
+    ax.grid(axis="y", linewidth=0.4, zorder=1)
+    ax.spines[["right", "top"]].set_visible(False)
+    ax.set_xticks(x)
+    ax.set_xticklabels([name for _, name in pairs], rotation=20, ha="right")
+    ax.set_ylabel("Spearman rank correlation")
+    ax.legend(frameon=False, fontsize=7)
+
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(save_path)
+    plt.close()
 
 
-def build_estimator_matrix(
-    runs: list[wandb.apis.public.Run],
+def build_estimator_observation_matrix(
+    run_entries: list[tuple[wandb.apis.public.Run, str]],
     metrics: list[str],
     estimators: list[str],
     args: argparse.Namespace,
 ) -> tuple[np.ndarray, list[str]]:
-    """Build rows as estimators and columns as metric/run observations."""
+    """Create estimator x observation matrix from metrics across runs."""
+    runs = [run for run, _ in run_entries]
     prefixes = discover_prefixes(runs, metrics, estimators)
-    rows = {estimator: [] for estimator in estimators}
+    method_order = [method for _, method in run_entries]
 
-    for metric in metrics:
-        prefix = choose_prefix(prefixes, metric, args)
-        if prefix is None:
-            continue
-        for run in runs:
-            observation_values = {}
+    rows: dict[str, list[float]] = {estimator: [] for estimator in estimators}
+    for method_label in method_order:
+        run = next(run for run, label in run_entries if label == method_label)
+        for metric in metrics:
+            prefix = choose_prefix(metric, prefixes, args.ood_prefix)
+            if prefix is None:
+                continue
+            observation: dict[str, float] = {}
             for estimator in estimators:
-                value = read_summary_value(run, metric, estimator, prefix)
-                if value is None:
-                    observation_values = {}
+                value = read_value(run, metric, estimator, prefix)
+                if value is None or np.isnan(value):
+                    observation = {}
                     break
-                observation_values[estimator] = (
-                    -value
-                    if metric == "ece_hard_bma_correctness_original"
-                    else value
-                )
-            for estimator, value in observation_values.items():
+                observation[estimator] = value
+            for estimator, value in observation.items():
                 rows[estimator].append(value)
 
-    row_labels = [
-        ESTIMATOR_LABELS.get(estimator, estimator)
-        for estimator, row in rows.items()
-        if len(row) >= 2
-    ]
-    matrix_rows = [row for row in rows.values() if len(row) >= 2]
-    if not matrix_rows:
+    kept_estimators = [estimator for estimator, row in rows.items() if len(row) >= 2]
+    if not kept_estimators:
         return np.array([]), []
 
-    return np.array(matrix_rows), row_labels
+    matrix = np.array([rows[estimator] for estimator in kept_estimators])
+    labels = [estimator_label(estimator) for estimator in kept_estimators]
+    return matrix, labels
 
 
-def plot_correlation_matrix(
-    matrix: np.ndarray,
-    labels: list[str],
-    name: str,
-    save_path: Path,
-) -> None:
-    """Plot a correlation matrix with annotations."""
-    if matrix.shape[0] < 2 or matrix.shape[1] < 2:
-        logger.info("Skipping %s; need at least two rows and two runs.", name)
-        return
-
+def compute_correlation(matrix: np.ndarray, corr_type: str) -> np.ndarray:
+    """Compute pairwise Pearson or Spearman row-wise correlation."""
     corr = np.eye(matrix.shape[0])
     for i in range(matrix.shape[0]):
         for j in range(matrix.shape[0]):
-            corr[i, j] = (
-                spearmanr(matrix[i], matrix[j])[0]
-                if name == "spearman"
-                else pearsonr(matrix[i], matrix[j])[0]
-            )
+            if corr_type == "spearman":
+                corr[i, j] = spearmanr(matrix[i], matrix[j])[0]
+            else:
+                corr[i, j] = pearsonr(matrix[i], matrix[j])[0]
+    return corr
 
-    fig_width = max(5.0, 0.35 * len(labels))
-    fig, ax = plt.subplots(figsize=(fig_width, fig_width))
+
+def plot_correlation_heatmap(
+    matrix: np.ndarray,
+    labels: list[str],
+    corr_type: str,
+    title: str,
+    save_path: Path,
+) -> None:
+    """Plot and save a correlation heatmap with annotations."""
+    if matrix.size == 0 or matrix.shape[0] < 2 or matrix.shape[1] < 2:
+        logger.info("Skipping %s: matrix is too small.", title)
+        return
+
+    corr = compute_correlation(matrix, corr_type)
+
+    fig_size = max(6.0, 0.45 * len(labels))
+    fig, ax = plt.subplots(figsize=(fig_size, fig_size))
     image = ax.imshow(corr, cmap="coolwarm", vmin=-1, vmax=1)
-    cbar = fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04)
-    cbar.outline.set_visible(False)
+    colorbar = fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04)
+    colorbar.outline.set_visible(False)
+
+    ax.set_title(title)
     ax.set_xticks(np.arange(len(labels)))
     ax.set_yticks(np.arange(len(labels)))
     ax.set_xticklabels(labels, rotation=45, ha="right")
     ax.set_yticklabels(labels)
+
     for i in range(len(labels)):
         for j in range(len(labels)):
-            ax.text(
-                j,
-                i,
-                f"{corr[i, j]:.2f}",
-                ha="center",
-                va="center",
-                fontsize=5,
-            )
+            ax.text(j, i, f"{corr[i, j]:.2f}", ha="center", va="center", fontsize=5)
+
     ax.spines[["right", "top"]].set_visible(False)
+    ax.set_title("")
     save_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(save_path)
     plt.close()
 
 
-def plot_scatter_from_tensor(path: Path, save_path: Path) -> None:
-    """Plot a density-colored log-log scatter from a saved decomposition pair."""
+def plot_loglog_density_scatter(path: Path, save_path: Path) -> None:
+    """Plot density-colored log-log scatter from a saved tensor pair."""
     first, second = torch.load(path, map_location="cpu", weights_only=True)
     x = first.detach().float().flatten().numpy()
     y = second.detach().float().flatten().numpy()
+
     mask = np.isfinite(x) & np.isfinite(y) & (x > 0) & (y > 0)
     x = x[mask]
     y = y[mask]
     if len(x) < 2:
-        logger.info(
-            "Skipping scatter for %s; not enough positive finite points.",
-            path,
-        )
+        logger.info("Skipping %s: not enough finite positive points.", path)
         return
 
-    xy = np.vstack([np.log10(x), np.log10(y)])
-    density = gaussian_kde(xy)(xy)
+    log_xy = np.vstack([np.log10(x), np.log10(y)])
+    density = gaussian_kde(log_xy)(log_xy)
     order = density.argsort()
+
     x = x[order]
     y = y[order]
     density = density[order]
 
-    _, ax = plt.subplots(figsize=(6, 5))
-    scatter = ax.scatter(x, y, c=density, s=10, cmap="plasma")
+    _, ax = plt.subplots(figsize=(5.2, 4.2))
+    scatter = ax.scatter(x, y, c=density, s=7, cmap="plasma")
     ax.set_xscale("log")
     ax.set_yscale("log")
-    ax.set_xlabel("Aleatoric Uncertainty")
-    ax.set_ylabel("Epistemic Uncertainty")
+    ax.set_xlabel("Aleatoric uncertainty")
+    ax.set_ylabel("Epistemic uncertainty")
+    ax.set_title(path.stem)
     ax.spines[["right", "top"]].set_visible(False)
     plt.colorbar(scatter, ax=ax, label="Density")
+
     save_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(save_path)
     plt.close()
 
 
-def fetch_runs(args: argparse.Namespace) -> list[wandb.apis.public.Run]:
-    """Fetch matching finished W&B runs."""
-    if not ID_TO_METHOD.get(args.dataset):
-        msg = f"No run mapping configured in ID_TO_METHOD for dataset {args.dataset!r}."
-        raise ValueError(msg)
-
-    filters: dict[str, Any] = {"state": "finished"}
-    if args.run_group_filter:
-        filters["group"] = args.run_group_filter
-
-    api = wandb.Api()
-    runs = [
-        run
-        for run in tqdm(api.runs(args.wandb_project, filters=filters))
-        if run_matches(run, args)
-    ]
-    logger.info("Found %d matching W&B runs.", len(runs))
-    return runs
-
-
 def main() -> None:
-    """Generate all requested FLELLA/LLEFLA plots."""
+    """Generate all requested dual-Laplace plots."""
+    args = parse_args()
     setup_plot_style()
-    args = parser.parse_args()
+
     output_dir = args.output_dir or Path(f"results/{args.dataset}/dual_laplace")
+    run_entries = load_runs(args)
 
-    if not args.no_wandb:
-        runs = fetch_runs(args)
-        for plot_name, (metrics, estimators) in RANKING_SPECS.items():
-            values = collect_values(runs, metrics, estimators, args)
-            plot_grouped_bars(
-                values=values,
-                metrics=metrics,
-                estimators=estimators,
-                title=plot_name.replace("_", " ").title(),
-                save_path=output_dir / f"{plot_name}.pdf",
+    # 1) IT rank correlations with explicit AU/EU pairings.
+    it_values = collect_metric_values(
+        run_entries,
+        metrics=list(IT_PAIRWISE_METRICS),
+        estimators=[None],
+        args=args,
+    )
+    plot_pairwise_rank_correlation(
+        values=it_values,
+        pairwise_metrics=IT_PAIRWISE_METRICS,
+        title="",
+        save_path=output_dir / "01_it_pairwise_rank_correlation.pdf",
+    )
+
+    # Bregman pairings requested alongside IT comparisons.
+    bregman_values = collect_metric_values(
+        run_entries,
+        metrics=list(BREGMAN_PAIRWISE_METRICS),
+        estimators=[None],
+        args=args,
+    )
+    plot_pairwise_rank_correlation(
+        values=bregman_values,
+        pairwise_metrics=BREGMAN_PAIRWISE_METRICS,
+        title="",
+        save_path=output_dir / "01b_bregman_pairwise_rank_correlation.pdf",
+    )
+
+    # 3) Predictive entropy results.
+    predictive_values = collect_metric_values(
+        run_entries,
+        metrics=PREDICTIVE_ENTROPY_METRICS,
+        estimators=PREDICTIVE_ESTIMATORS,
+        args=args,
+    )
+    for metric in PREDICTIVE_ENTROPY_METRICS:
+        plot_metric_by_method(
+            values=predictive_values,
+            metric=metric,
+            estimators=PREDICTIVE_ESTIMATORS,
+            title="",
+            save_path=output_dir / f"03_predictive_entropy_{metric}.pdf",
+        )
+
+    # 3b) ECE results with fallback metric names.
+    ece_predictive_values = collect_metric_values(
+        run_entries,
+        metrics=ECE_METRICS,
+        estimators=PREDICTIVE_ESTIMATORS,
+        args=args,
+    )
+    for metric in ECE_METRICS:
+        if any(ece_predictive_values.get((metric, est, method))
+               for est in PREDICTIVE_ESTIMATORS
+               for method in [m for _, m in run_entries]):
+            plot_metric_by_method(
+                values=ece_predictive_values,
+                metric=metric,
+                estimators=PREDICTIVE_ESTIMATORS,
+                title="",
+                save_path=output_dir / f"03b_ece_{metric}.pdf",
             )
+            break
 
-        matrix_metrics = [
-            "auroc_hard_bma_correctness_original",
-            "auroc_oodness",
-            "ece_hard_bma_correctness_original",
-            "rank_correlation_bregman_au",
-        ]
-        matrix, labels = build_run_metric_matrix(
-            runs=runs,
-            metrics=matrix_metrics,
-            estimators=MATRIX_ESTIMATORS,
-            args=args,
-        )
-        plot_correlation_matrix(
-            matrix=matrix,
-            labels=labels,
-            name="spearman",
-            save_path=output_dir / "j_spearman_rank_correlation_matrix.pdf",
-        )
-        plot_correlation_matrix(
-            matrix=matrix,
-            labels=labels,
-            name="pearson",
-            save_path=output_dir / "i_pearson_correlation_matrix.pdf",
-        )
+    # 4) OOD detection AUROC.
+    ood_values = collect_metric_values(
+        run_entries,
+        metrics=["auroc_oodness"],
+        estimators=EPISTEMIC_ESTIMATORS,
+        args=args,
+    )
+    plot_metric_by_method(
+        values=ood_values,
+        metric="auroc_oodness",
+        estimators=EPISTEMIC_ESTIMATORS,
+        title="",
+        save_path=output_dir / "04_ood_detection_auroc.pdf",
+    )
 
-        estimator_matrix, estimator_labels = build_estimator_matrix(
-            runs=runs,
-            metrics=matrix_metrics,
-            estimators=MATRIX_ESTIMATORS,
-            args=args,
-        )
-        plot_correlation_matrix(
-            matrix=estimator_matrix,
-            labels=estimator_labels,
-            name="spearman",
-            save_path=output_dir / "b_uncertainty_estimator_matrix_spearman.pdf",
-        )
-        plot_correlation_matrix(
-            matrix=estimator_matrix,
-            labels=estimator_labels,
-            name="pearson",
-            save_path=output_dir / "b_uncertainty_estimator_matrix_pearson.pdf",
-        )
+    # 5) Rank correlation with ground-truth aleatoric uncertainty.
+    gt_aleatoric_values = collect_metric_values(
+        run_entries,
+        metrics=["rank_correlation_bregman_au"],
+        estimators=ALEATORIC_ESTIMATORS,
+        args=args,
+    )
+    plot_metric_by_method(
+        values=gt_aleatoric_values,
+        metric="rank_correlation_bregman_au",
+        estimators=ALEATORIC_ESTIMATORS,
+        title="",
+        save_path=output_dir / "05_gt_aleatoric_rank_correlation.pdf",
+    )
 
-        decomp_matrix, decomp_labels = build_run_metric_matrix(
-            runs=runs,
-            metrics=IT_RANK_CORRELATION_METRICS
-            + IT_PEARSON_CORRELATION_METRICS
-            + BREGMAN_RANK_CORRELATION_METRICS
-            + BREGMAN_PEARSON_CORRELATION_METRICS
-            + [
-                "rank_correlation_bregman_au_b_dual_bma",
-                "correlation_bregman_au_b_dual_bma",
-            ],
-            estimators=[None],
-            args=args,
-        )
-        plot_correlation_matrix(
-            matrix=decomp_matrix,
-            labels=decomp_labels,
-            name="spearman",
-            save_path=output_dir / "b_decomposition_correlation_matrix_spearman.pdf",
+    # 6) ID correctness AUROC.
+    id_auroc_values = collect_metric_values(
+        run_entries,
+        metrics=["auroc_hard_bma_correctness_original"],
+        estimators=EPISTEMIC_ESTIMATORS,
+        args=args,
+    )
+    plot_metric_by_method(
+        values=id_auroc_values,
+        metric="auroc_hard_bma_correctness_original",
+        estimators=EPISTEMIC_ESTIMATORS,
+        title="",
+        save_path=output_dir / "06_id_correctness_auroc.pdf",
+    )
+
+    # 7) Expected calibration error.
+    ece_values = collect_metric_values(
+        run_entries,
+        metrics=ECE_METRICS,
+        estimators=ECE_ESTIMATORS,
+        args=args,
+    )
+    for metric in ECE_METRICS:
+        plot_metric_by_method(
+            values=ece_values,
+            metric=metric,
+            estimators=ECE_ESTIMATORS,
+            title="",
+            save_path=output_dir / f"07_expected_calibration_error_{metric}.pdf",
         )
 
+    # 8) Rank correlation of Bregman aleatoric and bias terms.
+    au_bias_values = collect_metric_values(
+        run_entries,
+        metrics=["rank_correlation_bregman_au_b_dual_bma"],
+        estimators=[None],
+        args=args,
+    )
+    plot_metric_by_method(
+        values=au_bias_values,
+        metric="rank_correlation_bregman_au_b_dual_bma",
+        estimators=[None],
+        title="",
+        save_path=output_dir / "08_bregman_aleatoric_bias_rank_correlation.pdf",
+    )
+
+    # 2/9/10) Correlation matrices between uncertainty estimators.
+    estimator_matrix, estimator_labels = build_estimator_observation_matrix(
+        run_entries=run_entries,
+        metrics=MATRIX_METRICS,
+        estimators=CORRELATION_MATRIX_ESTIMATORS,
+        args=args,
+    )
+    plot_correlation_heatmap(
+        matrix=estimator_matrix,
+        labels=estimator_labels,
+        corr_type="pearson",
+        title="",
+        save_path=output_dir / "02_uncertainty_estimator_correlation_matrix.pdf",
+    )
+    plot_correlation_heatmap(
+        matrix=estimator_matrix,
+        labels=estimator_labels,
+        corr_type="pearson",
+        title="",
+        save_path=output_dir / "09_pearson_correlation_matrix.pdf",
+    )
+    plot_correlation_heatmap(
+        matrix=estimator_matrix,
+        labels=estimator_labels,
+        corr_type="spearman",
+        title="",
+        save_path=output_dir / "10_spearman_rank_correlation_matrix.pdf",
+    )
+
+    # 11) Density-colored log-log scatter plots from saved tensors.
     if args.tensor_dir is not None:
         for path in sorted(args.tensor_dir.glob(args.tensor_glob)):
             relative = path.relative_to(args.tensor_dir)
-            save_name = relative.with_suffix(".pdf").as_posix().replace("/", "__")
-            plot_scatter_from_tensor(path, output_dir / "scatter" / save_name)
+            filename = relative.with_suffix(".pdf").as_posix().replace("/", "__")
+            plot_loglog_density_scatter(
+                path=path,
+                save_path=output_dir / "11_loglog_density_scatter" / filename,
+            )
+    else:
+        logger.info("Skipping density scatter plots: --tensor-dir not provided.")
 
 
 if __name__ == "__main__":

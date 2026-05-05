@@ -44,12 +44,12 @@ COLOR_BASELINE = np.array([154.0, 160.0, 166.0]) / 255.0
 COLOR_DETERMINISTIC = np.array([251.0, 188.0, 4.0]) / 255.0
 
 ID_TO_METHOD_CIFAR10 = {
-    "splendid-cherry-131": "CE Baseline",
-    "pious-lake-132": "Low-rank FLELLA-10",
-    "lunar-durian-133": "KFAC FLELLA-10",
-    "dashing-music-134": "KFAC FLELLA-30",
-    "misty-lake-135": "Low-rank LLEFLA-30",
-    "comfy-sun-136": "KFAC LLEFLA-30",
+    "2y0ul53c": "CE Baseline",
+    "j2b6l7hv": "Low-rank EU Laplace-10",
+    "sa5ww85r": "KFAC EU Laplace-10",
+    "8cbhjtaq": "KFAC EU Laplace-30",
+    "mh0jxlcl": "Low-rank AU Laplace-30",
+    "6lxblmy9": "KFAC AU Laplace-30",
 }
 
 ID_TO_METHOD_IMAGENET = {}
@@ -108,17 +108,18 @@ DATASET_PREFIX_LIST_CIFAR10 = [
 ]
 
 DATASET_PREFIX_LIST = {
+    "imagenet": DATASET_PREFIX_LIST_IMAGENET,
     "cifar10": DATASET_PREFIX_LIST_CIFAR10,
 }
 
 DISTRIBUTIONAL_METHODS = [
     "Laplace",
     "Dual Laplace",
-    "Low-rank FLELLA-10",
-    "KFAC FLELLA-10",
-    "KFAC FLELLA-30",
-    "Low-rank LLEFLA-30",
-    "KFAC LLEFLA-30",
+    "Low-rank EU Laplace-10",
+    "KFAC EU Laplace-10",
+    "KFAC EU Laplace-30",
+    "Low-rank AU Laplace-30",
+    "KFAC AU Laplace-30",
 ]
 
 EVIDENTIAL_METHODS = []
