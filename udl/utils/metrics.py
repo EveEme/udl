@@ -35,65 +35,6 @@ def get_log_probs(probs: Tensor) -> Tensor:
     return probs.clamp(min=eps).log()
 
 
-def param_l2_distance(
-    params1_dict: dict[str, Tensor],
-    params2_dict: dict[str, Tensor],
-    exclude_params_regex: str | None = None,
-) -> float:
-    """Compute L2 distance between two parameter dictionaries.
-
-    Args:
-        params1_dict: First parameter dictionary.
-        params2_dict: Second parameter dictionary.
-        exclude_params_regex: Optional regex pattern to exclude parameters.
-
-    Returns:
-        L2 distance between the parameter dictionaries.
-
-    Raises:
-        ValueError: If parameter dictionaries have mismatched keys.
-    """
-    if exclude_params_regex is not None:
-        pattern = re.compile(exclude_params_regex)
-        filtered_params1 = {
-            k: v for k, v in params1_dict.items() if not pattern.match(k)
-        }
-        filtered_params2 = {
-            k: v for k, v in params2_dict.items() if not pattern.match(k)
-        }
-    else:
-        filtered_params1 = params1_dict
-        filtered_params2 = params2_dict
-
-    # Validate parameter sets match
-    params1_keys = set(filtered_params1.keys())
-    params2_keys = set(filtered_params2.keys())
-
-    if params1_keys != params2_keys:
-        missing_in_params2 = params1_keys - params2_keys
-        missing_in_params1 = params2_keys - params1_keys
-        msg = "Parameter dictionaries have mismatched keys."
-        if missing_in_params2:
-            msg += f" Missing in params2: {missing_in_params2}."
-        if missing_in_params1:
-            msg += f" Missing in params1: {missing_in_params1}."
-        raise ValueError(msg)
-
-    if not filtered_params1:
-        return 0.0
-
-    # Get device from first parameter
-    first_param = next(iter(filtered_params1.values()))
-    total_distance = torch.tensor(
-        0.0, device=first_param.device, dtype=first_param.dtype
-    )
-    for name in filtered_params1:
-        diff = filtered_params1[name] - filtered_params2[name]
-        total_distance += torch.norm(diff, p=2).square()
-
-    return torch.sqrt(total_distance).item()
-
-
 def calculate_bin_metrics(
     confidences: Tensor, correctnesses: Tensor, num_bins: int = 10
 ) -> tuple[Tensor, Tensor, Tensor]:

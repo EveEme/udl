@@ -19,8 +19,8 @@ from torch import Tensor, nn
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader, Dataset
 
-from bul.models.model_factory import create_model
-from bul.utils.filter import enable_grads_by_regex
+from udl.models.model_factory import create_model
+from udl.utils.filter import enable_grads_by_regex
 from untangle.utils import (
     AverageMeter,
     CheckpointSaver,
@@ -230,33 +230,6 @@ def setup_scheduler(
 
     return lr_scheduler, num_epochs
 
-
-@torch.no_grad()
-def initialize_lazy_modules(
-    model: nn.Module,
-    amp_autocast: Callable,
-    data_config: dict[str, Any],
-    device: torch.device,
-    args: argparse.Namespace,
-) -> None:
-    """Initializes lazy modules in the model.
-
-    Args:
-        model: The model to initialize.
-        amp_autocast: The autocast function to use.
-        data_config: The data configuration.
-        device: The device to use for initialization.
-        args: The command-line arguments.
-    """
-    dummy_input = torch.randn(
-        args.batch_size,
-        *tuple(data_config["input_size"]),
-    ).to(device)
-
-    with amp_autocast():
-        model(dummy_input)
-
-
 def train(
     num_epochs: int,
     model: nn.Module,
@@ -378,207 +351,6 @@ def load_best_checkpoint(saver: CheckpointSaver, model: nn.Module) -> None:
     checkpoint = torch.load(best_save_path, map_location="cpu", weights_only=True)
     state_dict = checkpoint["state_dict"]
     model.load_state_dict(state_dict, strict=True)
-
-
-def test(
-    num_epochs: int,
-    model: nn.Module,
-    train_loader: DataLoader | PrefetchLoader,
-    hard_id_eval_loader: DataLoader | PrefetchLoader,
-    id_test_loader: DataLoader | PrefetchLoader,
-    ood_uniform_test_loaders: dict[str, dict[str, DataLoader | PrefetchLoader]],
-    ood_varied_test_loaders: dict[str, DataLoader | PrefetchLoader],
-    saver: CheckpointSaver,
-    amp_autocast: Callable,
-    device: torch.device,
-    storage_device: torch.device,
-    output_dir: Path,
-    args: argparse.Namespace,
-) -> None:
-    """Performs final tests on the trained model.
-
-    Args:
-        num_epochs: The number of epochs the model was trained for.
-        model: The trained model.
-        train_loader: The data loader for the training set.
-        hard_id_eval_loader: The data loader for the hard in-distribution
-            evaluation set.
-        id_test_loader: The data loader for the in-distribution test set.
-        ood_uniform_test_loaders: The data loaders for the uniform out-of-distribution
-            test sets.
-        ood_varied_test_loaders: The data loaders for the varied out-of-distribution
-            test sets.
-        saver: The checkpoint saver.
-        amp_autocast: The autocast function to use.
-        device: The device to use for testing.
-        storage_device: The device to use for storing evaluation metrics.
-        output_dir: The path to the output directory.
-        args: The command-line arguments.
-    """
-    logger.info("Starting final tests.")
-
-    if num_epochs > 0:
-        # No post-hoc method, load best checkpoint first
-        load_best_checkpoint(saver, model)
-
-    time_start_test = time.perf_counter()
-
-    model.eval()
-
-    update_post_hoc_method(
-        model=model,
-        train_loader=train_loader,
-        hard_id_eval_loader=hard_id_eval_loader,
-        args=args,
-    )
-
-    best_test_metrics = evaluate_on_test_sets(
-        model=model,
-        id_test_loader=id_test_loader,
-        ood_uniform_test_loaders=ood_uniform_test_loaders,
-        ood_varied_test_loaders=ood_varied_test_loaders,
-        device=device,
-        storage_device=storage_device,
-        amp_autocast=amp_autocast,
-        output_dir=output_dir,
-        discard_ood_test_sets=args.discard_ood_test_sets,
-        discard_uniform_ood_test_sets=args.discard_uniform_ood_test_sets,
-        args=args,
-    )
-
-    if args.log_wandb:
-        log_wandb(best_test_metrics=best_test_metrics)
-
-    time_end_test = time.perf_counter()
-    logger.info(f"Tests took {time_end_test - time_start_test:.4f} seconds.")
-
-
-def main() -> None:
-    """Runs the main training and testing pipeline.
-
-    Raises:
-        ValueError: If an invalid evaluation metric is specified.
-    """
-    time_start_setup = time.perf_counter()
-    args = parse_args()
-    setup_logging(args)
-    device, storage_device = setup_devices(args)
-
-    set_random_seed(args.seed)
-    data_config = resolve_data_config(vars(args))
-    amp_autocast, loss_scaler = setup_amp(device, args)
-
-    model = create_model(
-        model_name=args.model_name,
-        num_classes=args.num_classes,
-        device=device,
-    )
-
-    model = wrap_model(
-        model=model,
-        model_wrapper_name=args.method_name,
-        reset_classifier=args.reset_classifier,
-        weight_paths=args.weight_paths,
-        num_mc_samples=args.num_mc_samples,
-        num_mc_samples_cv=args.num_mc_samples_cv,
-        checkpoint_path=args.initial_checkpoint_path,
-    )
-
-    # Move model to device
-    model.to(device=device)
-
-    if args.channels_last:
-        if args.method_name == "laplace":
-            msg = "--channels-last not supported for Laplace"
-            raise ValueError(msg)
-
-        model.to(memory_format=torch.channels_last)
-
-    setup_learning_rate(args)
-    optimizer = create_optimizer_v2(
-        model,
-        **optimizer_kwargs(args=args),
-    )
-    setup_compile(model, args)
-
-    (
-        train_loader,
-        id_eval_loader,
-        hard_id_eval_loader,
-        id_test_loader,
-        ood_uniform_test_loaders,
-        ood_varied_test_loaders,
-    ) = create_loaders(
-        data_config=data_config,
-        args=args,
-        device=device,
-    )
-
-    train_loss_fn = nn.CrossEntropyLoss()
-    train_loss_fn = train_loss_fn.to(device=device)
-
-    # Setup checkpoint saver and eval metric tracking
-    eval_metric = args.eval_metric
-
-    output_dir = setup_output_dir(data_config, args)
-
-    saver = CheckpointSaver(
-        model=model,
-        optimizer=optimizer,
-        amp_scaler=loss_scaler,
-        decreasing=False,
-        max_history=args.checkpoint_history,
-        checkpoint_dir=output_dir,
-    )
-
-    lr_scheduler, num_epochs = setup_scheduler(optimizer, train_loader, args)
-
-    time_end_setup = time.perf_counter()
-    logger.info(f"Setup took {time_end_setup - time_start_setup:.4f} seconds.")
-
-    try:
-        if num_epochs > 0:
-            best_eval_metric, best_epoch = train(
-                num_epochs=num_epochs,
-                model=model,
-                optimizer=optimizer,
-                train_loss_fn=train_loss_fn,
-                lr_scheduler=lr_scheduler,
-                train_loader=train_loader,
-                saver=saver,
-                amp_autocast=amp_autocast,
-                loss_scaler=loss_scaler,
-                id_eval_loader=id_eval_loader,
-                eval_metric=eval_metric,
-                device=device,
-                storage_device=storage_device,
-                output_dir=output_dir,
-                args=args,
-            )
-
-            logger.info(
-                f"Best eval metric: {best_eval_metric:.4f} (epoch {best_epoch})."
-            )
-
-        if args.evaluate_on_test_sets:
-            test(
-                num_epochs=num_epochs,
-                model=model,
-                train_loader=train_loader,
-                hard_id_eval_loader=hard_id_eval_loader,
-                id_test_loader=id_test_loader,
-                ood_uniform_test_loaders=ood_uniform_test_loaders,
-                ood_varied_test_loaders=ood_varied_test_loaders,
-                saver=saver,
-                amp_autocast=amp_autocast,
-                device=device,
-                storage_device=storage_device,
-                output_dir=output_dir,
-                args=args,
-            )
-    except KeyboardInterrupt:
-        pass
-
 
 def evaluate_on_test_sets(
     model: nn.Module,
@@ -1235,6 +1007,204 @@ def backward(
         if need_update:
             optimizer.step()
 
+def test(
+    num_epochs: int,
+    model: nn.Module,
+    train_loader: DataLoader | PrefetchLoader,
+    hard_id_eval_loader: DataLoader | PrefetchLoader,
+    id_test_loader: DataLoader | PrefetchLoader,
+    ood_uniform_test_loaders: dict[str, dict[str, DataLoader | PrefetchLoader]],
+    ood_varied_test_loaders: dict[str, DataLoader | PrefetchLoader],
+    saver: CheckpointSaver,
+    amp_autocast: Callable,
+    device: torch.device,
+    storage_device: torch.device,
+    output_dir: Path,
+    args: argparse.Namespace,
+) -> None:
+    """Performs final tests on the trained model.
+
+    Args:
+        num_epochs: The number of epochs the model was trained for.
+        model: The trained model.
+        train_loader: The data loader for the training set.
+        hard_id_eval_loader: The data loader for the hard in-distribution
+            evaluation set.
+        id_test_loader: The data loader for the in-distribution test set.
+        ood_uniform_test_loaders: The data loaders for the uniform out-of-distribution
+            test sets.
+        ood_varied_test_loaders: The data loaders for the varied out-of-distribution
+            test sets.
+        saver: The checkpoint saver.
+        amp_autocast: The autocast function to use.
+        device: The device to use for testing.
+        storage_device: The device to use for storing evaluation metrics.
+        output_dir: The path to the output directory.
+        args: The command-line arguments.
+    """
+    logger.info("Starting final tests.")
+
+    if num_epochs > 0:
+        # No post-hoc method, load best checkpoint first
+        load_best_checkpoint(saver, model)
+
+    time_start_test = time.perf_counter()
+
+    model.eval()
+
+    update_post_hoc_method(
+        model=model,
+        train_loader=train_loader,
+        hard_id_eval_loader=hard_id_eval_loader,
+        args=args,
+    )
+
+    best_test_metrics = evaluate_on_test_sets(
+        model=model,
+        id_test_loader=id_test_loader,
+        ood_uniform_test_loaders=ood_uniform_test_loaders,
+        ood_varied_test_loaders=ood_varied_test_loaders,
+        device=device,
+        storage_device=storage_device,
+        amp_autocast=amp_autocast,
+        output_dir=output_dir,
+        discard_ood_test_sets=args.discard_ood_test_sets,
+        discard_uniform_ood_test_sets=args.discard_uniform_ood_test_sets,
+        args=args,
+    )
+
+    if args.log_wandb:
+        log_wandb(best_test_metrics=best_test_metrics)
+
+    time_end_test = time.perf_counter()
+    logger.info(f"Tests took {time_end_test - time_start_test:.4f} seconds.")
+
+
+def main() -> None:
+    """Runs the main training and testing pipeline.
+
+    Raises:
+        ValueError: If an invalid evaluation metric is specified.
+    """
+    time_start_setup = time.perf_counter()
+    args = parse_args()
+    setup_logging(args)
+    device, storage_device = setup_devices(args)
+
+    set_random_seed(args.seed)
+    data_config = resolve_data_config(vars(args))
+    amp_autocast, loss_scaler = setup_amp(device, args)
+
+    model = create_model(
+        model_name=args.model_name,
+        num_classes=args.num_classes,
+        device=device,
+    )
+
+    model = wrap_model(
+        model=model,
+        model_wrapper_name=args.method_name,
+        reset_classifier=args.reset_classifier,
+        weight_paths=args.weight_paths,
+        num_mc_samples=args.num_mc_samples,
+        num_mc_samples_cv=args.num_mc_samples_cv,
+        checkpoint_path=args.initial_checkpoint_path,
+    )
+
+    # Move model to device
+    model.to(device=device)
+
+    if args.channels_last:
+        if args.method_name == "laplace":
+            msg = "--channels-last not supported for Laplace"
+            raise ValueError(msg)
+
+        model.to(memory_format=torch.channels_last)
+
+    setup_learning_rate(args)
+    optimizer = create_optimizer_v2(
+        model,
+        **optimizer_kwargs(args=args),
+    )
+    setup_compile(model, args)
+
+    (
+        train_loader,
+        id_eval_loader,
+        hard_id_eval_loader,
+        id_test_loader,
+        ood_uniform_test_loaders,
+        ood_varied_test_loaders,
+    ) = create_loaders(
+        data_config=data_config,
+        args=args,
+        device=device,
+    )
+
+    train_loss_fn = nn.CrossEntropyLoss()
+    train_loss_fn = train_loss_fn.to(device=device)
+
+    # Setup checkpoint saver and eval metric tracking
+    eval_metric = args.eval_metric
+
+    output_dir = setup_output_dir(data_config, args)
+
+    saver = CheckpointSaver(
+        model=model,
+        optimizer=optimizer,
+        amp_scaler=loss_scaler,
+        decreasing=False,
+        max_history=args.checkpoint_history,
+        checkpoint_dir=output_dir,
+    )
+
+    lr_scheduler, num_epochs = setup_scheduler(optimizer, train_loader, args)
+
+    time_end_setup = time.perf_counter()
+    logger.info(f"Setup took {time_end_setup - time_start_setup:.4f} seconds.")
+
+    try:
+        if num_epochs > 0:
+            best_eval_metric, best_epoch = train(
+                num_epochs=num_epochs,
+                model=model,
+                optimizer=optimizer,
+                train_loss_fn=train_loss_fn,
+                lr_scheduler=lr_scheduler,
+                train_loader=train_loader,
+                saver=saver,
+                amp_autocast=amp_autocast,
+                loss_scaler=loss_scaler,
+                id_eval_loader=id_eval_loader,
+                eval_metric=eval_metric,
+                device=device,
+                storage_device=storage_device,
+                output_dir=output_dir,
+                args=args,
+            )
+
+            logger.info(
+                f"Best eval metric: {best_eval_metric:.4f} (epoch {best_epoch})."
+            )
+
+        if args.evaluate_on_test_sets:
+            test(
+                num_epochs=num_epochs,
+                model=model,
+                train_loader=train_loader,
+                hard_id_eval_loader=hard_id_eval_loader,
+                id_test_loader=id_test_loader,
+                ood_uniform_test_loaders=ood_uniform_test_loaders,
+                ood_varied_test_loaders=ood_varied_test_loaders,
+                saver=saver,
+                amp_autocast=amp_autocast,
+                device=device,
+                storage_device=storage_device,
+                output_dir=output_dir,
+                args=args,
+            )
+    except KeyboardInterrupt:
+        pass
 
 if __name__ == "__main__":
     main()

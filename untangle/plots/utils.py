@@ -54,30 +54,6 @@ ID_TO_METHOD = {
     "cifar10": ID_TO_METHOD_CIFAR10,
 }
 
-DATASET_PREFIX_LIST_IMAGENET = [
-    "best_id_test",
-    "best_ood_test_varied_soft_imagenet_s1",
-    "best_ood_test_varied_soft_imagenet_s2",
-    "best_ood_test_varied_soft_imagenet_s3",
-    "best_ood_test_varied_soft_imagenet_s4",
-    "best_ood_test_varied_soft_imagenet_s5",
-    # "best_ood_test_avg_soft_imagenet_s1",
-    # "best_ood_test_avg_soft_imagenet_s2",
-    # "best_ood_test_avg_soft_imagenet_s3",
-    # "best_ood_test_avg_soft_imagenet_s4",
-    # "best_ood_test_avg_soft_imagenet_s5",
-    "best_ood_test_varied_soft_imagenet_s1_mixed_soft_imagenet",
-    "best_ood_test_varied_soft_imagenet_s2_mixed_soft_imagenet",
-    "best_ood_test_varied_soft_imagenet_s3_mixed_soft_imagenet",
-    "best_ood_test_varied_soft_imagenet_s4_mixed_soft_imagenet",
-    "best_ood_test_varied_soft_imagenet_s5_mixed_soft_imagenet",
-    # "best_ood_test_avg_soft_imagenet_s1_mixed_soft_imagenet",
-    # "best_ood_test_avg_soft_imagenet_s2_mixed_soft_imagenet",
-    # "best_ood_test_avg_soft_imagenet_s3_mixed_soft_imagenet",
-    # "best_ood_test_avg_soft_imagenet_s4_mixed_soft_imagenet",
-    # "best_ood_test_avg_soft_imagenet_s5_mixed_soft_imagenet",
-]
-
 DATASET_PREFIX_LIST_CIFAR10 = [
     "best_id_test",
     "best_ood_test_varied_soft_cifar10_s1",
