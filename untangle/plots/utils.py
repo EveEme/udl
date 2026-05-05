@@ -44,47 +44,15 @@ COLOR_BASELINE = np.array([154.0, 160.0, 166.0]) / 255.0
 COLOR_DETERMINISTIC = np.array([251.0, 188.0, 4.0]) / 255.0
 
 ID_TO_METHOD_CIFAR10 = {
-    "uo3gu133": "CE Baseline",
-    "sgvtuzo5": "Corr. Pred.",
-    "8apeaj9a": "DDU",
-    "bn1hsbqz": "Deep Ens.",
-    "ii1o54ln": "DUQ",
-    "vuel80q8": "EDL",
-    "3h3gyzxj": "GP",
-    "w2gpx8od": "HET",
-    "wj1sesqf": "HetClassNN",
-    "xaz96x6d": "HET-XL",
-    "nnle8epz": "Laplace",
-    "y5mljm78": "Loss Pred.",
-    "h0m0bybl": "Mahalanobis",
-    "u1ozluxv": "MC Dropout",
-    "8bqhu92u": "PostNet",
-    "lcvixgvo": "Shallow Ens.",
-    "mhu72izt": "SNGP",
-    "zsiqsl6u": "SWAG",
-    "lh04ospw": "Temperature",
+    "splendid-cherry-131": "CE Baseline",
+    "pious-lake-132": "Low-rank FLELLA-10",
+    "lunar-durian-133": "KFAC FLELLA-10",
+    "dashing-music-134": "KFAC FLELLA-30",
+    "misty-lake-135": "Low-rank LLEFLA-30",
+    "comfy-sun-136": "KFAC LLEFLA-30",
 }
 
-ID_TO_METHOD_IMAGENET = {
-    "znhyrrk6": "CE Baseline",
-    "11ueh7cq": "Corr. Pred.",
-    "k9myyurz": "DDU",
-    "54kpysjy": "Deep Ens.",
-    "gl6qgpv6": "EDL",
-    "4nr8lsd1": "GP",
-    "s060twci": "HET",
-    "bryrtulr": "HetClassNN",
-    "t1myokqo": "HET-XL",
-    "42thx27s": "Laplace",
-    "7flvihja": "Loss Pred.",
-    "8a3palks": "Mahalanobis",
-    "1pqijue2": "MC Dropout",
-    "zm0o0mo9": "PostNet",
-    "pipwlaae": "Shallow Ens.",
-    "74rysdqf": "SNGP",
-    "5yknlf4l": "SWAG",
-    "jfnn98e3": "Temperature",
-}
+ID_TO_METHOD_IMAGENET = {}
 
 ID_TO_METHOD = {
     "imagenet": ID_TO_METHOD_IMAGENET,
@@ -140,27 +108,20 @@ DATASET_PREFIX_LIST_CIFAR10 = [
 ]
 
 DATASET_PREFIX_LIST = {
-    "imagenet": DATASET_PREFIX_LIST_IMAGENET,
     "cifar10": DATASET_PREFIX_LIST_CIFAR10,
 }
 
 DISTRIBUTIONAL_METHODS = [
-    "Deep Ens.",
-    "EDL",
-    "GP",
-    "HET",
-    "HetClassNN",
-    "HET-XL",
     "Laplace",
-    "MC Dropout",
-    "PostNet",
-    "Shallow Ens.",
-    "SNGP",
-    "SWAG",
     "Dual Laplace",
+    "Low-rank FLELLA-10",
+    "KFAC FLELLA-10",
+    "KFAC FLELLA-30",
+    "Low-rank LLEFLA-30",
+    "KFAC LLEFLA-30",
 ]
 
-EVIDENTIAL_METHODS = ["EDL", "PostNet"]
+EVIDENTIAL_METHODS = []
 
 ESTIMATOR_CONVERSION_DICT = {
     "entropies_of_bma": r"$\text{PU}^\text{it}$",
@@ -178,12 +139,6 @@ ESTIMATOR_CONVERSION_DICT = {
     "one_minus_expected_max_probs": r"$1 - \mathbb{E}\left[\max \bm{\pi}\right]$",
     "one_minus_max_probs_of_bma": r"$1 - \max \bar{\bm{\pi}}$",
     "one_minus_max_probs_of_dual_bma": r"$1 - \max \tilde{\bm{\pi}}$",
-    "dempster_shafer_values": r"$\text{D-S}$",
-    "error_probabilities": r"$u^\text{cp}$",
-    "duq_values": r"$u^\text{duq}$",
-    "mahalanobis_values": r"$u^\text{mah}$",
-    "loss_values": r"$u^\text{rp}$",
-    "gmm_neg_log_densities": r"$u^\text{ddu}$",
     "expected_variances_of_logits": r"$\mathbb{E}\left[\text{var }\bm{f}\right]$",
     "expected_variances_of_internal_logits": (
         r"$\mathbb{E}\left[\text{var }\bm{f}^\text{int}\right]$"
@@ -192,6 +147,14 @@ ESTIMATOR_CONVERSION_DICT = {
     "expected_variances_of_internal_probs": (
         r"$\mathbb{E}\left[\text{var }\bm{\pi}^\text{int}\right]$"
     ),
+    "au_it_au": r"$\text{AU}_{\text{AU-LA}}^\text{it}$",
+    "au_it_eu": r"$\text{EU}_{\text{AU-LA}}^\text{it}$",
+    "eu_it_au": r"$\text{AU}_{\text{EU-LA}}^\text{it}$",
+    "eu_it_eu": r"$\text{EU}_{\text{EU-LA}}^\text{it}$",
+    "au_bregman_au": r"$\text{AU}_{\text{AU-LA}}^\text{b}$",
+    "au_bregman_eu": r"$\text{EU}_{\text{AU-LA}}^\text{b}$",
+    "eu_bregman_au": r"$\text{AU}_{\text{EU-LA}}^\text{b}$",
+    "eu_bregman_eu": r"$\text{EU}_{\text{EU-LA}}^\text{b}$",
 }
 
 ONLY_DISTRIBUTIONAL_ESTIMATORS = [
@@ -207,6 +170,14 @@ ONLY_DISTRIBUTIONAL_ESTIMATORS = [
     "expected_variances_of_internal_logits",
     "expected_variances_of_probs",
     "expected_variances_of_internal_probs",
+    "au_it_au",
+    "au_it_eu",
+    "eu_it_au",
+    "eu_it_eu",
+    "au_bregman_au",
+    "au_bregman_eu",
+    "eu_bregman_au",
+    "eu_bregman_eu",
 ]
 
 ONLY_NON_EVIDENTIAL_ESTIMATORS = [
@@ -269,7 +240,15 @@ CONSTRAINED_METRICS = [
 ]
 
 CORRELATION_MATRIX_ESTIMATORS = [
-    "one_minus_max_probs_of_dual_bma",
-    "one_minus_max_probs_of_bma",
-    "one_minus_expected_max_probs",
+    "entropies_of_bma",
+    "au_it_au",
+    "au_it_eu",
+    "eu_it_au",
+    "eu_it_eu",
+    "au_bregman_au",
+    "au_bregman_eu",
+    "eu_bregman_au",
+    "eu_bregman_eu",
+    "expected_entropies",
+    "jensen_shannon_divergences",
 ]
