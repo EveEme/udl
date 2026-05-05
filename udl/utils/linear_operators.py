@@ -16,9 +16,9 @@ from torch.func import functional_call, jvp, vjp, vmap
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from bul.models.linearized import LinearizedModel
-from bul.utils.flatten import get_param_keys, unflatten_to_param_dict_like
-from bul.utils.loaders import (
+from udl.models.linearized import LinearizedModel
+from udl.utils.flatten import get_param_keys, unflatten_to_param_dict_like
+from udl.utils.loaders import (
     PrefetchLoader,
     calculate_num_samples,
     calculate_total_dim,

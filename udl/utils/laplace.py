@@ -10,14 +10,14 @@ from torch import Tensor
 from torch.func import jvp, vmap
 from torch.utils.data import DataLoader
 
-from bul.models.linearized import LinearizedModel
-from bul.utils.flatten import (
+from udl.models.linearized import LinearizedModel
+from udl.utils.flatten import (
     flatten_param_dict,
     get_param_keys,
     unflatten_to_param_dict_like,
 )
-from bul.utils.linear_operators import MatmulMixin, make_forward_fn
-from bul.utils.metrics import calibration_error
+from udl.utils.linear_operators import MatmulMixin, make_forward_fn
+from udl.utils.metrics import calibration_error
 
 logger = logging.getLogger(__name__)
 

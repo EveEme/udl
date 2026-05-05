@@ -131,7 +131,6 @@ def parse_args() -> argparse.Namespace:
 def setup_plot_style() -> None:
     """Use plotting style."""
     config = bundles.neurips2024()
-    config["figure.figsize"] = (5.2, 2.9)
     plt.rcParams.update(config)
     plt.rcParams["text.latex.preamble"] += (
         r"\usepackage{amsmath} \usepackage{amsfonts} \usepackage{bm}"

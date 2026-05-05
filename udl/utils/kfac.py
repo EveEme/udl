@@ -14,7 +14,7 @@ from torch import Tensor, nn
 from torch.nn import BatchNorm1d, BatchNorm2d, BatchNorm3d
 from torch.utils.data import DataLoader
 
-from bul.utils.linear_operators import MatmulMixin
+from udl.utils.linear_operators import MatmulMixin
 
 warnings.filterwarnings(
     "ignore",
