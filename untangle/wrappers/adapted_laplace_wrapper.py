@@ -17,10 +17,10 @@ from torch import Tensor, nn
 from torch.func import jvp
 from torch.utils.data import DataLoader
 
-from bul.utils.flatten import unflatten_to_param_dict_like
-from bul.utils.kfac import KFACScaleOperator, get_kfac_list_loader, get_kfac_scale_op
-from bul.utils.linear_operators import make_forward_fn
-from bul.utils.low_rank import (
+from udl.utils.flatten import unflatten_to_param_dict_like
+from udl.utils.kfac import KFACScaleOperator, get_kfac_list_loader, get_kfac_scale_op
+from udl.utils.linear_operators import make_forward_fn
+from udl.utils.low_rank import (
     DiagonalPlusLowRankOperator,
     compute_low_rank_eigendecomposition,
     create_ggn_linear_operator,

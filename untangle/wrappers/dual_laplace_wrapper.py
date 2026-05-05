@@ -8,7 +8,7 @@ import torch
 from torch import Tensor, nn
 from torch.utils.data import DataLoader
 
-from bul.utils.filter import enable_grads_by_regex
+from udl.utils.filter import enable_grads_by_regex
 from untangle.utils.loader import PrefetchLoader
 from untangle.wrappers.adapted_laplace_wrapper import AdaptedLaplaceWrapper
 from untangle.wrappers.model_wrapper import DistributionalWrapper

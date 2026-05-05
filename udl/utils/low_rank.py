@@ -12,8 +12,8 @@ from skerch.algorithms import seigh
 from torch import Tensor, nn
 from torch.utils.data import DataLoader
 
-from bul.utils.decompositions import select_skerch_measurements
-from bul.utils.linear_operators import GGNLinearOperator, MatmulMixin
+from udl.utils.decompositions import select_skerch_measurements
+from udl.utils.linear_operators import GGNLinearOperator, MatmulMixin
 
 logger = logging.getLogger(__name__)
 

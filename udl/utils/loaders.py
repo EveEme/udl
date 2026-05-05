@@ -17,8 +17,8 @@ from torch.utils.data import (
     Sampler,
 )
 
-from bul.utils.constants import CIFAR_IMG_SIZE, DATASET_CONFIGS, INTERPOLATION
-from bul.utils.transforms import (
+from udl.utils.constants import CIFAR_IMG_SIZE, DATASET_CONFIGS, INTERPOLATION
+from udl.utils.transforms import (
     transforms_cifar_eval,
     transforms_cifar_train,
 )

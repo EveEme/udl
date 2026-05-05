@@ -3,7 +3,7 @@
 import torch
 from torch import Tensor
 
-from bul.models.linearized import LinearizedModel
+from udl.models.linearized import LinearizedModel
 
 
 def get_param_keys(linearized_model: LinearizedModel) -> list[str]:
