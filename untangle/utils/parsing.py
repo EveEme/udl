@@ -775,34 +775,6 @@ group.add_argument(
     help="Number of epochs to train",
 )
 
-# Augmentation & regularization parameters
-group = parser.add_argument_group("Augmentation and regularization parameters")
-group.add_argument(
-    "--uce-regularization-factor",
-    type=float,
-    default=1e-5,
-    help="UCE regularization factor for PostNets",
-)
-group.add_argument(
-    "--edl-start-epoch",
-    type=int,
-    default=0,
-    help="Start epoch for the EDL flatness regularizer",
-)
-group.add_argument(
-    "--edl-scaler",
-    type=float,
-    default=1.0,
-    help="Scaler for the EDL flatness regularizer",
-)
-group.add_argument(
-    "--edl-activation",
-    type=str,
-    default="exp",
-    help="EDL final activation function",
-)
-
-# Misc
 group = parser.add_argument_group("Miscellaneous parameters")
 group.add_argument("--seed", type=int, default=42, help="Random seed")
 group.add_argument(
@@ -883,21 +855,6 @@ def parse_args() -> argparse.Namespace:
 
     if args.data_dir_id is None:
         args.data_dir_id = args.data_dir
-
-    # Detect a special code that tells us to use the local node storage.
-    SLURM_TUE_PATH = Path(
-        f"/host/scratch_local/{os.environ.get('SLURM_JOB_USER')}-"
-        f"{os.environ.get('SLURM_JOBID')}/datasets"
-    )
-
-    if str(args.data_dir) == "SLURM_TUE":
-        args.data_dir = SLURM_TUE_PATH
-
-    if str(args.data_dir_id) == "SLURM_TUE":
-        args.data_dir_id = SLURM_TUE_PATH
-
-    if str(args.soft_imagenet_label_dir) == "SLURM_TUE":
-        args.soft_imagenet_label_dir = SLURM_TUE_PATH
 
     if args.discard_ood_test_sets:
         args.severities = ()

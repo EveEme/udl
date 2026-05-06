@@ -2356,9 +2356,6 @@ def forward_general_model_on_loader(
 
         time_forward_start = time.perf_counter()
 
-        """if isinstance(model, SWAGWrapper | FastDeepEnsembleWrapper | DDUWrapper):
-            inference_dict = model(input, amp_autocast)
-        else:"""
         with amp_autocast():
             inference_dict = model(input)
 
