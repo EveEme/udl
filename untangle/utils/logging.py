@@ -24,7 +24,7 @@ def setup_logging(args: argparse.Namespace, level: int = logging.INFO) -> None:
     )
 
     if args.log_wandb:
-        wandb.init(project="thesis", config=args)
+        wandb.init(project="uld-thesis", config=args)
 
 
 def log_wandb(

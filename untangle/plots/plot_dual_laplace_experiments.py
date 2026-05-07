@@ -20,29 +20,33 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 IT_PAIRWISE_METRICS = {
-    "rank_correlation_au_it_au_vs_eu": "AU-Laplace AU vs AU-Laplace EU",
-    "rank_correlation_au_it_au_vs_eu_it_eu": "AU-Laplace AU vs EU-Laplace EU",
-    "rank_correlation_eu_it_au_vs_eu": "EU-Laplace AU vs EU-Laplace EU",
-    "rank_correlation_eu_it_au_vs_au_it_eu": "EU-Laplace AU vs AU-Laplace EU",
+    "rank_correlation_au_it_au_vs_eu": r"$\text{AU}_{\text{last}} \quad \text{vs} \quad \text{EU}_{\text{last}}$",
+    "rank_correlation_au_it_au_vs_eu_it_eu": r"$\text{AU}_{\text{last}} \quad \text{vs} \quad \text{EU}_{\text{first}}$",
+    "rank_correlation_eu_it_au_vs_eu": r"$\text{AU}_{\text{first}} \quad \text{vs} \quad \text{EU}_{\text{first}}$",
+    "rank_correlation_eu_it_au_vs_au_it_eu": r"$\text{AU}_{\text{first}} \quad \text{vs} \quad \text{EU}_{\text{last}}$",
 }
 
 BREGMAN_PAIRWISE_METRICS = {
-    "rank_correlation_au_bregman_au_vs_eu": "AU-Laplace AU vs AU-Laplace EU",
-    "rank_correlation_au_bregman_au_vs_eu_bregman_eu": "AU-Laplace AU vs EU-Laplace EU",
-    "rank_correlation_eu_bregman_au_vs_eu": "EU-Laplace AU vs EU-Laplace EU",
-    "rank_correlation_eu_bregman_au_vs_au_bregman_eu": "EU-Laplace AU vs AU-Laplace EU",
+    "rank_correlation_au_bregman_au_vs_eu": r"$\text{AU}_{\text{last}} \quad \text{vs} \quad \text{EU}_{\text{last}}$",
+    "rank_correlation_au_bregman_au_vs_eu_bregman_eu": r"$\text{AU}_{\text{last}} \quad \text{vs} \quad \text{EU}_{\text{first}}$",
+    "rank_correlation_eu_bregman_au_vs_eu": r"$\text{AU}_{\text{first}} \quad \text{vs} \quad \text{EU}_{\text{first}}$",
+    "rank_correlation_eu_bregman_au_vs_au_bregman_eu": r"$\text{AU}_{\text{first}} \quad \text{vs} \quad \text{EU}_{\text{last}}$",
 }
 
 PREDICTIVE_ENTROPY_METRICS = [
     "auroc_hard_bma_correctness_original",
     "auroc_oodness",
     "ece_hard_bma_correctness_original",
+    "brier_score_hard_bma_correctness_original",
+    "log_prob_score_hard_bma_correctness_original",
 ]
 
 METRIC_NAME = {
     "auroc_hard_bma_correctness_original": "ID Correctness AUROC",
     "auroc_oodness": "OOD AUROC",
-    "ece_hard_bma_correctness_original": "-ECE",
+    "ece_hard_bma_correctness_original": "ECE",
+    "brier_score_hard_bma_correctness_original": "Brier",
+    "log_prob_score_hard_bma_correctness_original": "Log Prob.",
     "rank_correlation_bregman_au": "Rank Corr. with GT Aleatoric",
     "rank_correlation_bregman_au_b_dual_bma": "Bregman AU vs Bias Rank Corr.",
 }
@@ -53,7 +57,7 @@ ECE_METRICS = [
 EPISTEMIC_ESTIMATORS = ["au_it_eu", "eu_it_eu", "jensen_shannon_divergences", "one_minus_max_probs_of_bma"]
 ALEATORIC_ESTIMATORS = ["au_it_au", "eu_it_au", "expected_entropies"]
 PREDICTIVE_ESTIMATORS = ["entropies_of_bma", "one_minus_max_probs_of_bma"]
-ECE_ESTIMATORS = EPISTEMIC_ESTIMATORS + PREDICTIVE_ESTIMATORS
+ECE_ESTIMATORS = list(dict.fromkeys(EPISTEMIC_ESTIMATORS + PREDICTIVE_ESTIMATORS))
 
 CORRELATION_MATRIX_ESTIMATORS = [
     "entropies_of_bma",
@@ -73,6 +77,8 @@ MATRIX_METRICS = [
     "auroc_hard_bma_correctness_original",
     "auroc_oodness",
     "ece_hard_bma_correctness_original",
+    "brier_score_hard_bma_correctness_original",
+    "log_prob_score_hard_bma_correctness_original",
     "rank_correlation_bregman_au",
 ]
 
@@ -161,10 +167,8 @@ def infer_method_tags(method_label: str) -> tuple[str | None, str | None]:
         approx = "low-rank"
 
     laplace_type = None
-    if contains(method_label, "eu laplace"):
-        laplace_type = "eu"
-    elif contains(method_label, "au laplace"):
-        laplace_type = "au"
+    if contains(method_label, "LA"):
+        laplace_type = "LA"
 
     return approx, laplace_type
 
@@ -175,6 +179,9 @@ def should_include_method(
     laplace_types: list[str],
 ) -> bool:
     """Return whether a configured method label should be included."""
+    if contains(method_label, "CE Baseline"):
+        return True
+
     approx, laplace_type = infer_method_tags(method_label)
     if approx is None or laplace_type is None:
         return False
@@ -266,8 +273,6 @@ def read_value(
         return None
 
     scalar = float(value)
-    if metric == "ece_hard_bma_correctness_original":
-        scalar *= -1
     return scalar
 
 
@@ -309,6 +314,7 @@ def collect_metric_values(
     """Collect values keyed by metric, estimator, and method label."""
     runs = [run for run, _ in run_entries]
     prefixes = discover_prefixes(runs, metrics, estimators)
+    unique_estimators = list(dict.fromkeys(estimators))
 
     values: dict[tuple[str, str | None, str], list[float]] = defaultdict(list)
     for metric in metrics:
@@ -318,7 +324,7 @@ def collect_metric_values(
             continue
 
         for run, method_label in run_entries:
-            for estimator in estimators:
+            for estimator in unique_estimators:
                 scalar = read_value(run, metric, estimator, prefix)
                 if scalar is None or np.isnan(scalar):
                     continue
@@ -336,10 +342,11 @@ def plot_metric_by_method(
 ) -> None:
     """Plot bars by method for one metric across one or more estimators."""
     methods = sorted({method for _, _, method in values})
+    unique_estimators = list(dict.fromkeys(estimators))
     rows: list[tuple[str, str, float, float]] = []
 
     for method in methods:
-        for estimator in estimators:
+        for estimator in unique_estimators:
             samples = values.get((metric, estimator, method), [])
             if not samples:
                 continue
@@ -355,8 +362,7 @@ def plot_metric_by_method(
     stds = [item[3] for item in rows]
     tick_labels = [f"{method}\n{est}" for method, est, _, _ in rows]
 
-    fig_width = max(6.0, 0.34 * len(rows))
-    _, ax = plt.subplots(figsize=(fig_width, 3.0))
+    _, ax = plt.subplots()
     ax.bar(x, means, yerr=stds, capsize=2, color="#2a77b3", zorder=2)
     ax.grid(axis="y", linewidth=0.4, zorder=1)
     ax.spines[["right", "top"]].set_visible(False)
@@ -386,7 +392,7 @@ def plot_pairwise_rank_correlation(
     x = np.arange(len(pairs))
     width = 0.8 / max(len(methods), 1)
 
-    _, ax = plt.subplots(figsize=(7.2, 3.0))
+    _, ax = plt.subplots()
     for index, method in enumerate(methods):
         means = []
         stds = []
@@ -477,8 +483,7 @@ def plot_correlation_heatmap(
 
     corr = compute_correlation(matrix, corr_type)
 
-    fig_size = max(6.0, 0.45 * len(labels))
-    fig, ax = plt.subplots(figsize=(fig_size, fig_size))
+    fig, ax = plt.subplots()
     image = ax.imshow(corr, cmap="coolwarm", vmin=-1, vmax=1)
     colorbar = fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04)
     colorbar.outline.set_visible(False)
@@ -521,7 +526,7 @@ def plot_loglog_density_scatter(path: Path, save_path: Path) -> None:
     y = y[order]
     density = density[order]
 
-    _, ax = plt.subplots(figsize=(5.2, 4.2))
+    _, ax = plt.subplots()
     scatter = ax.scatter(x, y, c=density, s=7, cmap="plasma")
     ax.set_xscale("log")
     ax.set_yscale("log")

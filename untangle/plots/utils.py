@@ -44,18 +44,13 @@ COLOR_BASELINE = np.array([154.0, 160.0, 166.0]) / 255.0
 COLOR_DETERMINISTIC = np.array([251.0, 188.0, 4.0]) / 255.0
 
 ID_TO_METHOD_CIFAR10 = {
-    "2y0ul53c": "CE Baseline",
-    "j2b6l7hv": "Low-rank EU Laplace-10",
-    "sa5ww85r": "KFAC EU Laplace-10",
-    "8cbhjtaq": "KFAC EU Laplace-30",
-    "mh0jxlcl": "Low-rank AU Laplace-30",
-    "6lxblmy9": "KFAC AU Laplace-30",
+    "bub4ag8d": "CE Baseline",
+    "3mrpfj24": "Low-rank LA",           
+    "xgqgdnwj": "KFAC LA",
+
 }
 
-ID_TO_METHOD_IMAGENET = {}
-
 ID_TO_METHOD = {
-    "imagenet": ID_TO_METHOD_IMAGENET,
     "cifar10": ID_TO_METHOD_CIFAR10,
 }
 
@@ -108,21 +103,16 @@ DATASET_PREFIX_LIST_CIFAR10 = [
 ]
 
 DATASET_PREFIX_LIST = {
-    "imagenet": DATASET_PREFIX_LIST_IMAGENET,
     "cifar10": DATASET_PREFIX_LIST_CIFAR10,
 }
 
 DISTRIBUTIONAL_METHODS = [
     "Laplace",
     "Dual Laplace",
-    "Low-rank EU Laplace-10",
-    "KFAC EU Laplace-10",
-    "KFAC EU Laplace-30",
-    "Low-rank AU Laplace-30",
-    "KFAC AU Laplace-30",
+    "Low-rank LA",
+    "KFAC LA"
 ]
 
-EVIDENTIAL_METHODS = []
 
 ESTIMATOR_CONVERSION_DICT = {
     "entropies_of_bma": r"$\text{PU}^\text{it}$",
@@ -148,14 +138,14 @@ ESTIMATOR_CONVERSION_DICT = {
     "expected_variances_of_internal_probs": (
         r"$\mathbb{E}\left[\text{var }\bm{\pi}^\text{int}\right]$"
     ),
-    "au_it_au": r"$\text{AU}_{\text{AU-LA}}^\text{it}$",
-    "au_it_eu": r"$\text{EU}_{\text{AU-LA}}^\text{it}$",
-    "eu_it_au": r"$\text{AU}_{\text{EU-LA}}^\text{it}$",
-    "eu_it_eu": r"$\text{EU}_{\text{EU-LA}}^\text{it}$",
-    "au_bregman_au": r"$\text{AU}_{\text{AU-LA}}^\text{b}$",
-    "au_bregman_eu": r"$\text{EU}_{\text{AU-LA}}^\text{b}$",
-    "eu_bregman_au": r"$\text{AU}_{\text{EU-LA}}^\text{b}$",
-    "eu_bregman_eu": r"$\text{EU}_{\text{EU-LA}}^\text{b}$",
+    "au_it_au": r"$\text{AU}_{\text{last}}^\text{it}$",
+    "au_it_eu": r"$\text{EU}_{\text{last}}^\text{it}$",
+    "eu_it_au": r"$\text{AU}_{\text{first}}^\text{it}$",
+    "eu_it_eu": r"$\text{EU}_{\text{first}}^\text{it}$",
+    "au_bregman_au": r"$\text{AU}_{\text{last}}^\text{b}$",
+    "au_bregman_eu": r"$\text{EU}_{\text{last}}^\text{b}$",
+    "eu_bregman_au": r"$\text{AU}_{\text{first}}^\text{b}$",
+    "eu_bregman_eu": r"$\text{EU}_{\text{first}}^\text{b}$",
 }
 
 ONLY_DISTRIBUTIONAL_ESTIMATORS = [
