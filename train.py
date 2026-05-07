@@ -1,6 +1,4 @@
-"""Copyright 2020 Ross Wightman and 2024 Bálint Mucsányi.
-
-Adapted for Laplace Approximation with Low-Rank.
+"""The main training and testing pipeline for uncertainty disentanglement with Laplace Approximation in Neural Networks (UDL).
 """
 
 import argparse

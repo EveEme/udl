@@ -1,5 +1,12 @@
 # Uncertainty Disentanglement with Laplace Approximations
+## Introduction
 Layer-wise Laplace approximations for epistemic and aleatoric uncertainty disentanglement in neural networks.
+
+This codebase include:
+- a training and evaluation loop for three methods (CE Baseline, Laplace Approximation, and Dual Laplace Approximation)
+- support for CIFAR-10 ResNet variants, including Wide ResNets
+- script to reproduce the results `(train.py)`
+- plotting utilities to recreate the plots
 
 ## Setup
 Create virtual environment for `uld` and then use one of the commands:
