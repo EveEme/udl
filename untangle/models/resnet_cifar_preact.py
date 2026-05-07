@@ -242,31 +242,7 @@ class ResNetCPreAct(nn.Module):
         out = self.forward_head(out)
 
         return out
-
-
-def wide_resnet_c_preact_26_10(
-    num_classes: int = 10,
-    in_chans: int = 3,
-    downsample_type: str = "conv",
-    act_layer: nn.Module = nn.ReLU,
-) -> ResNetCPreAct:
-    """Constructs a WideResNet-28-10 model.
-
-    Returns:
-        A WideResNet-28-10 model.
-    """
-    model = ResNetCPreAct(
-        block_fn=BasicBlockCPreAct,
-        depth=26,
-        width_multiplier=10,
-        num_classes=num_classes,
-        in_chans=in_chans,
-        downsample_type=downsample_type,
-        act_layer=act_layer,
-    )
-
-    return model
-
+    
 
 def resnet_c_preact_26(
     num_classes: int = 10,

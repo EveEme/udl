@@ -4,15 +4,9 @@ import logging
 from typing import Any
 
 import torch
-from timm.models import create_model as create_timm_model
 
 from untangle.models import (
-    resnet_50,
     resnet_c_preact_26,
-    resnet_fixup_50,
-    wide_resnet_c_26_10,
-    wide_resnet_c_fixup_26_10,
-    wide_resnet_c_preact_26_10,
 )
 from untangle.wrappers import (
     AdaptedLaplaceWrapper,
@@ -23,66 +17,8 @@ from untangle.wrappers import (
 logger = logging.getLogger(__name__)
 
 UNTANGLE_STR_TO_MODEL_CLASS = {
-    "resnet_50": resnet_50,
-    "resnet_fixup_50": resnet_fixup_50,
-    "wide_resnet_c_26_10": wide_resnet_c_26_10,
-    "wide_resnet_c_fixup_26_10": wide_resnet_c_fixup_26_10,
-    "wide_resnet_c_preact_26_10": wide_resnet_c_preact_26_10,
     "resnet_c_preact_26": resnet_c_preact_26,
 }
-
-
-def create_model(
-    model_name: str,
-    pretrained: bool,
-    num_classes: int,
-    in_chans: int,
-    model_kwargs: dict,
-) -> torch.nn.Module:
-    """Creates a model based on the given parameters.
-
-    Args:
-        model_name: Name of the model to create.
-        pretrained: Whether to use pretrained weights.
-        num_classes: Number of classes for the model.
-        in_chans: Number of input channels.
-        model_kwargs: Additional keyword arguments for model creation.
-
-    Returns:
-        The created model.
-
-    Raises:
-        ValueError: If an invalid prefix is provided in the model_name.
-    """
-    prefix, model_name = model_name.split("/")
-
-    if prefix == "timm":
-        model = create_timm_model(
-            model_name,
-            pretrained=pretrained,
-            in_chans=in_chans,
-            num_classes=num_classes,
-            **model_kwargs,
-        )
-    elif prefix == "untangle":
-        kwargs = dict(
-            num_classes=num_classes,
-            in_chans=in_chans,
-            **model_kwargs,
-        )
-
-        if model_name in {"resnet_fixup_50", "resnet_50"}:
-            kwargs["pretrained"] = pretrained
-
-        model = UNTANGLE_STR_TO_MODEL_CLASS[model_name](**kwargs)
-    else:
-        msg = f"Invalid prefix '{prefix}' provided."
-        raise ValueError(msg)
-
-    num_params = sum(param.numel() for param in model.parameters())
-    logger.info(f"Model {model_name} created, param count: {num_params}.")
-
-    return model
 
 
 def wrap_model(
