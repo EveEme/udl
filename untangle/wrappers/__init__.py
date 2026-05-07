@@ -1,8 +1,7 @@
 """Minimal Laplace-focused wrapper implementations.
 
 This module contains only the Laplace approximation wrappers and base classes
-needed for analyzing Laplace with subnetworks. Other uncertainty methods from
-the full untangle repo have been removed to reduce dependencies.
+needed for analyzing Laplace with subnetworks.
 """
 
 __all__ = [

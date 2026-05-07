@@ -1,8 +1,4 @@
-"""Laplace approximation wrapper class on Subnetworks.
-
-- loads model (already trained)
-- build laplace posterior using low-rank or KFAC tools
-"""
+"""Laplace approximation wrapper class."""
 
 import logging
 import time
@@ -86,7 +82,6 @@ class AdaptedLaplaceWrapper(DistributionalWrapper):
         with torch.enable_grad():
             logger.info("Starting Laplace approximation with defined subset")
 
-            # compute GGN with low-rank approximation
             if approx_method == "low-rank":
                 self._low_rank_approx(train_loader=train_loader, rank=rank)
                 self._low_rank = True
@@ -405,9 +400,6 @@ class AdaptedLaplaceWrapper(DistributionalWrapper):
 
         # Transform to posterior samples: Sigma^{1/2} @ v
         perturbations = scale_op @ v_samples  # [P, n_samples]
-
-        # Posterior samples: theta = theta* + Sigma^{1/2} @ v
-        # theta_samples = theta_map.unsqueeze(1) + perturbations
 
         # compute JVP to get logit
         jvp_results = []
