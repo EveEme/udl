@@ -1,7 +1,7 @@
 [project]
-name = "uld"
+name = "udl"
 authors = [{ name = "Evelyn Emelanov" }]
-urls = { Repository = "https://github.com/EveEme/uld" }
+urls = { Repository = "https://github.com/EveEme/udl" }
 description = "Uncertainty Disentanglement with Laplace Approximation in Neural Networks."
 classifiers = [
     "Development Status :: 3 - Alpha",
