@@ -30,7 +30,7 @@ from .metric import (
     relative_area_under_lift_curve,
     spearmanr,
 )
-from .model import create_model, wrap_model
+from .model import wrap_model
 from .parsing import (
     float_tuple,
     int_tuple,

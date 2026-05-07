@@ -19,8 +19,8 @@ from torch import Tensor, nn
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader, Dataset
 
-from bul.models.model_factory import create_model
-from bul.utils.filter import enable_grads_by_regex
+from udl.models.model_factory import create_model, wrap_model
+from udl.utils.filter import enable_grads_by_regex
 from untangle.utils import (
     AverageMeter,
     CheckpointSaver,
@@ -35,7 +35,6 @@ from untangle.utils import (
     scheduler_kwargs,
     set_random_seed,
     setup_logging,
-    wrap_model,
 )
 from untangle.utils.loader import PrefetchLoader
 from untangle.validate import (
