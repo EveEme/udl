@@ -9,7 +9,7 @@ This codebase include:
 - plotting utilities to recreate the plots
 
 ## Setup
-Create virtual environment for `uld` and then use one of the commands:
+Create virtual environment for `udl` and then use one of the commands:
 - `python -m pip install .`
 - `python -m pip install -e '.[dev]'` 
 
@@ -17,3 +17,11 @@ Create virtual environment for `uld` and then use one of the commands:
 The Cifar-10 dataset will be downloaded automatically.
 
 The Cifar10H dataset can be downloaded from here https://zenodo.org/records/8115942
+
+## Run
+For laplace experiments to run, first the ce baseline checkpoints have to be created.
+- Main script is train.py 
+
+## Plotting
+For plotting the results one can use the script plot_dual_laplace_experiments.py with the command
+`python plot_dual_laplace_experiments.py cifar10`

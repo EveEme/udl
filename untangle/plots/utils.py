@@ -47,7 +47,6 @@ ID_TO_METHOD_CIFAR10 = {
     "bub4ag8d": "CE Baseline",
     "3mrpfj24": "Low-rank LA",           
     "xgqgdnwj": "KFAC LA",
-
 }
 
 ID_TO_METHOD = {

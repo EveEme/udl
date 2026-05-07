@@ -132,22 +132,17 @@ group.add_argument(
 group.add_argument(
     "--dataset",
     type=str,
-    default="hard/imagenet",
+    default="hard/cifar10",
     help='Dataset type + name ("<type>/<name>")',
 )
-group.add_argument(
-    "--soft-imagenet-label-dir",
-    type=Path,
-    default=Path(),
-    help="Path to raters.npz and real.json soft ImageNet labels",
-)
+
 group.add_argument(
     "--data-dir-id", type=Path, default=None, help="Path to ID eval dataset root dir"
 )
 group.add_argument(
     "--dataset-id",
     type=str,
-    default="soft/imagenet",
+    default="soft/cifar10",
     help=(
         'ID eval + test dataset type + name ("<type>/<name>"), usually the same or a '
         "soft label variant of --dataset"
@@ -207,14 +202,6 @@ group.add_argument(
     type=int,
     default=100000,
     help="Maximum number of samples in (truncated) train dataset for the DDU method",
-)
-group.add_argument(
-    "--max-num-covariance-samples",
-    type=int,
-    default=100000,
-    help=(
-        "Number of samples to calculate the covariance matrix in the Mahalanobis method"
-    ),
 )
 group.add_argument(
     "--train-split",
@@ -549,34 +536,16 @@ group.add_argument(
     help="Whether to use temperature scaling for the Temperature and DDU methods",
 )
 group.add_argument(
-    "--scale",
-    default=(0.08, 1.0),
-    type=float_tuple,
-    help="Random resize scale for ImageNet",
-)
-group.add_argument(
-    "--ratio",
-    default=(3 / 4, 4 / 3),
-    type=float_tuple,
-    help="Random resize aspect ratio for ImageNet",
-)
-group.add_argument(
     "--hflip",
     type=float,
     default=0.5,
     help="Horizontal flip training aug probability",
 )
 group.add_argument(
-    "--color-jitter",
-    type=float,
-    default=0.0,
-    help="Color jitter factor for ImageNet",
-)
-group.add_argument(
     "--crop-pct",
     type=float,
     default=0.875,
-    help="Input image center crop percent for ImageNet eval",
+    help="Input image center crop percent for eval",
 )
 group.add_argument(
     "--padding",
@@ -903,9 +872,6 @@ def resolve_data_config(args: dict[str, Any]) -> dict[str, Any]:
     msg = "Data processing configuration for current model:"
 
     for n, v in data_config.items():
-        if "imagenet" in args["dataset"] and n == "padding":
-            continue
-
         if "cifar" in args["dataset"] and n in {"crop_pct", "crop_mode"}:
             continue
 
